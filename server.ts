@@ -43,15 +43,19 @@ interface ChatTurn {
 }
 
 app.post('/api/chat', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    res.status(200).json({ fallbackToLocal: true });
+    return;
+  }
+
   try {
     const {
       messages = [],
-      model = 'gemini-3.8-flash',
       roleContext = 'Admin',
       portfolioSnapshot = '',
     } = req.body as {
       messages: ChatTurn[];
-      model?: 'gemini-4-argon' | 'gemini-3.8-flash' | 'gemini-3.1-flash-lite';
       roleContext?: string;
       portfolioSnapshot?: string;
     };
@@ -61,64 +65,63 @@ app.post('/api/chat', async (req, res) => {
       return;
     }
 
-    const validModels = ['gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-    const selectedModel = validModels.includes(model) ? model : 'gemini-3.8-flash';
-
-    const systemInstruction = `You are the soleX Deal & Mandate Copilot, an enterprise AI advisor embedded inside the soleX Real Estate Master-Franchise Operating System in India.
+    const systemInstruction = `You are the soleX Deal & Mandate Copilot, an enterprise advisor embedded inside the soleX Real Estate Master-Franchise Operating System in India.
 Current Active User Role: ${roleContext}.
 
 Your Responsibilities:
 1. When the active role is Admin (Mandate HQ), help the user analyze inventory velocity across towers, structure developer mandate terms, calculate all-inclusive unit cost sheets (Base Price + Floor Rise + PLC + 5% GST + 6% Stamp Duty), and review pending channel partner commission payouts.
 2. When the active role is Broker (Channel Partner), help the broker pitch available units to their buyers, prepare payment plan comparisons, recommend matching units based on buyer budget/BHK, and track their commission statuses.
 3. Always format Indian currency values cleanly in Crores (₹ Cr) and Lakhs (₹ L) and reference exact unit numbers, lead names, and broker firms from the live state snapshot below.
-4. Keep responses concise, structured, and executive-ready.
+4. Keep responses concise, structured, and executive-ready. Plain text only without decorative markdown stars or emojis.
 
 Live soleX State Snapshot:
 ${portfolioSnapshot}`;
 
     const ai = getGenAIClient();
 
-    const history = messages.slice(0, -1).map((m) => ({
+    // Ensure turns start with a 'user' message (skip initial welcome 'model' message)
+    const rawTurns = messages.map((m) => ({
       role: m.role,
       parts: [{ text: m.text }],
     }));
-    const latestMessage = messages[messages.length - 1].text;
+    const firstUserIdx = rawTurns.findIndex((t) => t.role === 'user');
+    const validContents =
+      firstUserIdx >= 0 ? rawTurns.slice(firstUserIdx) : rawTurns;
 
-    const runChatWithModel = async (targetModel: string): Promise<{ text: string; usedModel: string }> => {
-      const chat = ai.chats.create({
-        model: targetModel,
-        history,
-        config: {
-          systemInstruction,
-        },
-      });
-      const response: GenerateContentResponse = await chat.sendMessage({
-        message: latestMessage,
-      });
-      return {
-        text: response.text || 'No response generated.',
-        usedModel: targetModel,
-      };
-    };
+    const candidateModels = [
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite-preview',
+    ];
 
-    try {
-      const result = await runChatWithModel(selectedModel);
-      res.json(result);
-    } catch (primaryErr: unknown) {
-      // If gemini-4-argon was requested without a paid key attached, gracefully fall back to gemini-3.8-flash
-      if (selectedModel === 'gemini-4-argon') {
-        const fallbackResult = await runChatWithModel('gemini-3.8-flash');
-        res.json({
-          ...fallbackResult,
-          fallbackNote: 'Executed with gemini-3.8-flash (standard tier key active).',
-        });
-        return;
+    for (const targetModel of candidateModels) {
+      try {
+        const response: GenerateContentResponse = await Promise.race([
+          ai.models.generateContent({
+            model: targetModel,
+            contents: validContents,
+            config: {
+              systemInstruction,
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Model request timed out')), 9000)
+          ),
+        ]);
+
+        if (response.text) {
+          res.json({
+            text: response.text,
+          });
+          return;
+        }
+      } catch {
+        // Continue to next candidate model
       }
-      throw primaryErr;
     }
-  } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : 'Unexpected error communicating with Gemini API';
-    res.status(500).json({ error: errMsg });
+
+    res.status(200).json({ fallbackToLocal: true });
+  } catch {
+    res.status(200).json({ fallbackToLocal: true });
   }
 });
 

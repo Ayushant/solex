@@ -4,19 +4,14 @@ import {
   getUnitAllInclusivePrice,
 } from '../store/useSolexStore';
 import { formatInr } from '../lib/formatters';
+import { generateLiveMandateResponse } from '../lib/copilotEngine';
 import { X, RotateCcw } from 'lucide-react';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
-  modelUsed?: string;
 }
-
-type ModelTier =
-  | 'gemini-3.8-flash'
-  | 'gemini-3.1-flash-lite'
-  | 'gemini-4-argon';
 
 export const DealCopilotDrawer: React.FC = () => {
   const {
@@ -32,8 +27,6 @@ export const DealCopilotDrawer: React.FC = () => {
     selectedProjectId,
   } = useSolexStore();
 
-  const [selectedModel, setSelectedModel] =
-    useState<ModelTier>('gemini-3.8-flash');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -41,7 +34,6 @@ export const DealCopilotDrawer: React.FC = () => {
       id: 'welcome-1',
       role: 'model',
       text: 'Ready with live project inventory, lead stages, and commission ledger state. Ask about available units, cost sheets, or payout calculations.',
-      modelUsed: 'gemini-3.8-flash',
     },
   ]);
 
@@ -115,6 +107,19 @@ Active Leads in Scope:
 ${leadSummary}`;
   };
 
+  const computeLocalFallback = (queryText: string) =>
+    generateLiveMandateResponse({
+      query: queryText,
+      role,
+      activeBrokerId,
+      selectedProjectId,
+      projects,
+      units,
+      leads,
+      brokers,
+      bookings,
+    });
+
   const sendPrompt = async (promptText: string) => {
     const trimmed = promptText.trim();
     if (!trimmed || isLoading) return;
@@ -131,12 +136,15 @@ ${leadSummary}`;
     setIsLoading(true);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 11000);
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: nextHistory.map((m) => ({ role: m.role, text: m.text })),
-          model: selectedModel,
           roleContext:
             role === 'Admin'
               ? 'Admin (Mandate HQ Director)'
@@ -145,29 +153,45 @@ ${leadSummary}`;
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get response from Copilot');
+      window.clearTimeout(timeoutId);
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!response.ok || !contentType.includes('application/json')) {
+        throw new Error('Fallback to live portfolio engine');
+      }
+
+      const data = (await response.json()) as {
+        text?: string;
+        fallbackToLocal?: boolean;
+      };
+
+      if (data.fallbackToLocal || !data.text) {
+        const localText = computeLocalFallback(trimmed);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}-bot`,
+            role: 'model',
+            text: localText,
+          },
+        ]);
+        return;
       }
 
       const botMsg: ChatMessage = {
         id: `msg-${Date.now()}-bot`,
         role: 'model',
         text: data.text,
-        modelUsed: data.usedModel || selectedModel,
       };
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err: unknown) {
-      const errText =
-        err instanceof Error
-          ? err.message
-          : 'Unable to reach Copilot service.';
+    } catch {
+      const localText = computeLocalFallback(trimmed);
       setMessages((prev) => [
         ...prev,
         {
-          id: `msg-${Date.now()}-err`,
+          id: `msg-${Date.now()}-bot`,
           role: 'model',
-          text: `Unable to process request: ${errText}`,
+          text: localText,
         },
       ]);
     } finally {
@@ -218,17 +242,6 @@ ${leadSummary}`;
           </div>
 
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value as ModelTier)}
-              aria-label="Select model"
-              className="input-control h-7 py-0 px-2 t-12 t-mono w-auto"
-            >
-              <option value="gemini-3.1-flash-lite">3.1-flash-lite</option>
-              <option value="gemini-3.8-flash">3.8-flash</option>
-              <option value="gemini-4-argon">4-argon</option>
-            </select>
-
             <button
               type="button"
               onClick={() =>
@@ -237,7 +250,6 @@ ${leadSummary}`;
                     id: `welcome-${Date.now()}`,
                     role: 'model',
                     text: 'Conversation reset.',
-                    modelUsed: selectedModel,
                   },
                 ])
               }
@@ -276,17 +288,12 @@ ${leadSummary}`;
               >
                 <div className="whitespace-pre-wrap">{msg.text}</div>
               </div>
-              {msg.modelUsed && msg.role === 'model' && (
-                <span className="t-12 t-mono text-[var(--text-tertiary)] mt-1">
-                  {msg.modelUsed}
-                </span>
-              )}
             </div>
           ))}
 
           {isLoading && (
-            <div className="t-12 text-[var(--text-tertiary)] t-mono">
-              Querying {selectedModel}...
+            <div className="t-12 text-[var(--text-tertiary)]">
+              Analyzing live ledger...
             </div>
           )}
 
