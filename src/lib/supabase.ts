@@ -260,51 +260,75 @@ export const DEMO_USERS: AuthenticatedUser[] = [
 
 // Complete SQL DDL script for Supabase SQL Editor (https://supabase.com/dashboard/project/udnnkhhamdzgdtmufwdk/sql/new)
 export const SOLEX_SUPABASE_SCHEMA_SQL = `-- ============================================================================
--- soleX Mandate OS — Production & Prototype Schema for Supabase PostgreSQL
--- Target Project: https://udnnkhhamdzgdtmufwdk.supabase.co
--- Run this script in your Supabase SQL Editor to enable full cloud table sync
+-- soleX Mandate Operating System — Supabase PostgreSQL Production Schema
+-- Designed for: Multi-Project Mandates, Live Inventory Locking, Broker Attribution
+-- Target: Supabase SQL Editor (idempotent, safe to run multiple times)
 -- ============================================================================
 
+-- 1. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. AUTOMATIC TIMESTAMP TRIGGER FUNCTION
+CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. CORE MANDATE OPERATING SYSTEM TABLES
+-- Projects & Mandates table
 CREATE TABLE IF NOT EXISTS public.solex_projects (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Unit Inventory & Dynamic Locking table
 CREATE TABLE IF NOT EXISTS public.solex_units (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
-  status TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Available',
   version INTEGER NOT NULL DEFAULT 1,
   payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Channel Partners & Registered Brokers table
 CREATE TABLE IF NOT EXISTS public.solex_brokers (
   id TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Leads & Channel Partner Attribution table
 CREATE TABLE IF NOT EXISTS public.solex_leads (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   assigned_broker_id TEXT NOT NULL,
-  stage TEXT NOT NULL,
+  stage TEXT NOT NULL DEFAULT 'Enquiry',
   payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Bookings, Payment Milestones & Brokerage Commission Ledger table
 CREATE TABLE IF NOT EXISTS public.solex_bookings (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   unit_id TEXT NOT NULL,
   broker_id TEXT NOT NULL,
-  commission_status TEXT NOT NULL,
+  commission_status TEXT NOT NULL DEFAULT 'Accrued',
   payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Audit Trail, System Events & Activity Log table
 CREATE TABLE IF NOT EXISTS public.solex_activities (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -312,7 +336,60 @@ CREATE TABLE IF NOT EXISTS public.solex_activities (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security (RLS) with open policies for evaluation prototype
+-- 4. HIGH-PERFORMANCE B-TREE & GIN (JSONB) INDEXES
+CREATE INDEX IF NOT EXISTS idx_solex_units_project_id ON public.solex_units(project_id);
+CREATE INDEX IF NOT EXISTS idx_solex_units_status ON public.solex_units(status);
+CREATE INDEX IF NOT EXISTS idx_solex_units_payload ON public.solex_units USING GIN(payload);
+
+CREATE INDEX IF NOT EXISTS idx_solex_leads_project_id ON public.solex_leads(project_id);
+CREATE INDEX IF NOT EXISTS idx_solex_leads_broker_id ON public.solex_leads(assigned_broker_id);
+CREATE INDEX IF NOT EXISTS idx_solex_leads_stage ON public.solex_leads(stage);
+CREATE INDEX IF NOT EXISTS idx_solex_leads_payload ON public.solex_leads USING GIN(payload);
+
+CREATE INDEX IF NOT EXISTS idx_solex_bookings_project_id ON public.solex_bookings(project_id);
+CREATE INDEX IF NOT EXISTS idx_solex_bookings_unit_id ON public.solex_bookings(unit_id);
+CREATE INDEX IF NOT EXISTS idx_solex_bookings_broker_id ON public.solex_bookings(broker_id);
+CREATE INDEX IF NOT EXISTS idx_solex_bookings_comm_status ON public.solex_bookings(commission_status);
+CREATE INDEX IF NOT EXISTS idx_solex_bookings_payload ON public.solex_bookings USING GIN(payload);
+
+CREATE INDEX IF NOT EXISTS idx_solex_activities_project_id ON public.solex_activities(project_id);
+CREATE INDEX IF NOT EXISTS idx_solex_activities_created_at ON public.solex_activities(created_at DESC);
+
+-- 5. AUTO-UPDATING TIMESTAMP TRIGGERS
+DROP TRIGGER IF EXISTS trg_solex_projects_updated_at ON public.solex_projects;
+CREATE TRIGGER trg_solex_projects_updated_at
+BEFORE UPDATE ON public.solex_projects
+FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+DROP TRIGGER IF EXISTS trg_solex_units_updated_at ON public.solex_units;
+CREATE TRIGGER trg_solex_units_updated_at
+BEFORE UPDATE ON public.solex_units
+FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+DROP TRIGGER IF EXISTS trg_solex_brokers_updated_at ON public.solex_brokers;
+CREATE TRIGGER trg_solex_brokers_updated_at
+BEFORE UPDATE ON public.solex_brokers
+FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+DROP TRIGGER IF EXISTS trg_solex_leads_updated_at ON public.solex_leads;
+CREATE TRIGGER trg_solex_leads_updated_at
+BEFORE UPDATE ON public.solex_leads
+FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+DROP TRIGGER IF EXISTS trg_solex_bookings_updated_at ON public.solex_bookings;
+CREATE TRIGGER trg_solex_bookings_updated_at
+BEFORE UPDATE ON public.solex_bookings
+FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+-- 6. FULL REPLICA IDENTITY (Allows instant real-time change diffs)
+ALTER TABLE public.solex_projects REPLICA IDENTITY FULL;
+ALTER TABLE public.solex_units REPLICA IDENTITY FULL;
+ALTER TABLE public.solex_brokers REPLICA IDENTITY FULL;
+ALTER TABLE public.solex_leads REPLICA IDENTITY FULL;
+ALTER TABLE public.solex_bookings REPLICA IDENTITY FULL;
+ALTER TABLE public.solex_activities REPLICA IDENTITY FULL;
+
+-- 7. ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.solex_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solex_units ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solex_brokers ENABLE ROW LEVEL SECURITY;
@@ -320,23 +397,48 @@ ALTER TABLE public.solex_leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solex_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solex_activities ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Allow public read/write solex_projects" ON public.solex_projects;
-CREATE POLICY "Allow public read/write solex_projects" ON public.solex_projects FOR ALL USING (true) WITH CHECK (true);
+-- Permissive policies for anon & authenticated web client access
+DROP POLICY IF EXISTS "Allow all access to solex_projects" ON public.solex_projects;
+CREATE POLICY "Allow all access to solex_projects" ON public.solex_projects FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public read/write solex_units" ON public.solex_units;
-CREATE POLICY "Allow public read/write solex_units" ON public.solex_units FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all access to solex_units" ON public.solex_units;
+CREATE POLICY "Allow all access to solex_units" ON public.solex_units FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public read/write solex_brokers" ON public.solex_brokers;
-CREATE POLICY "Allow public read/write solex_brokers" ON public.solex_brokers FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all access to solex_brokers" ON public.solex_brokers;
+CREATE POLICY "Allow all access to solex_brokers" ON public.solex_brokers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public read/write solex_leads" ON public.solex_leads;
-CREATE POLICY "Allow public read/write solex_leads" ON public.solex_leads FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all access to solex_leads" ON public.solex_leads;
+CREATE POLICY "Allow all access to solex_leads" ON public.solex_leads FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public read/write solex_bookings" ON public.solex_bookings;
-CREATE POLICY "Allow public read/write solex_bookings" ON public.solex_bookings FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all access to solex_bookings" ON public.solex_bookings;
+CREATE POLICY "Allow all access to solex_bookings" ON public.solex_bookings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow public read/write solex_activities" ON public.solex_activities;
-CREATE POLICY "Allow public read/write solex_activities" ON public.solex_activities FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all access to solex_activities" ON public.solex_activities;
+CREATE POLICY "Allow all access to solex_activities" ON public.solex_activities FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 8. GRANT PRIVILEGES TO POSTGREST ROLES
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+-- 9. ENABLE SUPABASE REALTIME REPLICATION
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE 
+        public.solex_projects, 
+        public.solex_units, 
+        public.solex_brokers, 
+        public.solex_leads, 
+        public.solex_bookings, 
+        public.solex_activities;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
 `;
 
 export interface SupabaseSyncSnapshot {

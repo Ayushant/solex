@@ -9,6 +9,36 @@
     <meta property="og:description" content="Enterprise real estate master-franchise operating system connecting live 2D/3D project inventory, lead-to-booking workflows, channel partner commissions, and an AI Deal Copilot." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Suppress Vite HMR / WebSocket client connection errors in AI Studio iframe container
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event.reason;
+        var msg = (reason && (reason.message || reason.stack || String(reason))) || '';
+        if (
+          msg.includes('WebSocket') ||
+          msg.includes('vite') ||
+          msg.includes('@vite/client') ||
+          msg.includes('ws') ||
+          msg.includes('closed without opened')
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+
+      window.addEventListener('error', function(event) {
+        var msg = (event.message || '') + ' ' + (event.filename || '');
+        if (
+          msg.includes('WebSocket') ||
+          msg.includes('@vite/client') ||
+          msg.includes('vite') ||
+          msg.includes('closed without opened')
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">

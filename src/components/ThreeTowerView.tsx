@@ -102,6 +102,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
   const [activePreset, setActivePreset] = useState<CameraPresetKey>('isometric');
   const [lightingMood, setLightingMood] = useState<LightingMood>('daylight');
   const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
+  const [webglFailed, setWebglFailed] = useState<boolean>(false);
   const [hoveredUnit, setHoveredUnit] = useState<{
     unit: PropertyUnit;
     x: number;
@@ -143,23 +144,32 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     const mount = canvasMountRef.current;
     if (!mount) return;
 
-    const isSoftwareGl = (() => {
-      const gl = document.createElement('canvas').getContext('webgl2');
-      if (!gl) return true;
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
-      const gpu = String(gl.getParameter(param));
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
-    })();
+    let cleanupFn: (() => void) | undefined;
 
-    const width = mount.clientWidth || 960;
-    const height = mount.clientHeight || 520;
+    try {
+      const isSoftwareGl = (() => {
+        try {
+          const gl =
+            document.createElement('canvas').getContext('webgl2') ||
+            document.createElement('canvas').getContext('webgl');
+          if (!gl) return true;
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
+          const gpu = String(gl.getParameter(param) || '');
+          gl.getExtension('WEBGL_lose_context')?.loseContext();
+          return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+        } catch {
+          return true;
+        }
+      })();
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
-      powerPreference: 'high-performance',
-    });
+      const width = mount.clientWidth || 960;
+      const height = mount.clientHeight || 520;
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: !isSoftwareGl,
+        powerPreference: 'high-performance',
+      });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
@@ -815,20 +825,28 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
     requestRender();
 
+      cleanupFn = () => {
+        isDisposed = true;
+        cancelAnimationFrame(frameId);
+        clearTimeout(frameId);
+        window.removeEventListener('resize', handleResize);
+        domElem.removeEventListener('pointerdown', handlePointerDown);
+        domElem.removeEventListener('pointerup', handlePointerUp);
+        domElem.removeEventListener('pointermove', handlePointerMove);
+        domElem.removeEventListener('pointerleave', handlePointerLeave);
+        controls.dispose();
+        pavingTex.dispose();
+        shadowTex.dispose();
+        envTarget.dispose();
+        renderer.dispose();
+      };
+    } catch (err) {
+      console.warn('WebGL initialization fallback:', err);
+      setWebglFailed(true);
+    }
+
     return () => {
-      isDisposed = true;
-      cancelAnimationFrame(frameId);
-      clearTimeout(frameId);
-      window.removeEventListener('resize', handleResize);
-      domElem.removeEventListener('pointerdown', handlePointerDown);
-      domElem.removeEventListener('pointerup', handlePointerUp);
-      domElem.removeEventListener('pointermove', handlePointerMove);
-      domElem.removeEventListener('pointerleave', handlePointerLeave);
-      controls.dispose();
-      pavingTex.dispose();
-      shadowTex.dispose();
-      envTarget.dispose();
-      renderer.dispose();
+      cleanupFn?.();
     };
   }, [project.id, project.floors]);
 
@@ -873,6 +891,18 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
   return (
     <div className="relative w-full h-[380px] sm:h-[520px] rounded-[10px] overflow-hidden border border-[var(--border)] bg-[#0B0B1E] select-none">
       <div ref={canvasMountRef} className="w-full h-full" />
+
+      {webglFailed && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center bg-[#0B0B1E]">
+          <Layers className="w-10 h-10 text-[#8686AC] mb-2" />
+          <div className="text-sm font-semibold text-[#FFFFE3]">
+            Interactive Stacking Matrix
+          </div>
+          <p className="text-xs text-[#A9A9C6] max-w-sm mt-1">
+            3D WebGL accelerated hardware fallback active. Use the Stacking Matrix below for full unit selection and locking.
+          </p>
+        </div>
+      )}
 
       {hoveredUnit && (
         <div
