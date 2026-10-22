@@ -1,0 +1,6 @@
+{
+  "name": "soleX — Real Estate Mandate & Channel OS",
+  "description": "Enterprise real estate master-franchise operating system connecting live 2D/3D project inventory, lead-to-booking workflows, channel partner commissions, and an AI Deal Copilot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
