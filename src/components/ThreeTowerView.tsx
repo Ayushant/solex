@@ -29,10 +29,8 @@ interface ThreeTowerViewProps {
 type CameraPresetKey = 'isometric' | 'front' | 'crown' | 'podium';
 type LightingMood = 'daylight' | 'golden';
 
-// Pre-allocated module-level math helpers (Zero GC in render loop)
 const _camTargetPos = new THREE.Vector3();
 const _camTargetLook = new THREE.Vector3();
-const _tempVec = new THREE.Vector3();
 
 function createProceduralPavingTexture(maxAnisotropy: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -40,11 +38,10 @@ function createProceduralPavingTexture(maxAnisotropy: number): THREE.CanvasTextu
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#e2e8f0';
+  ctx.fillStyle = '#EDEDE7';
   ctx.fillRect(0, 0, 512, 512);
 
-  // Architectural stone grid lines
-  ctx.strokeStyle = '#cbd5e1';
+  ctx.strokeStyle = '#DEDED8';
   ctx.lineWidth = 2;
   const step = 64;
   for (let i = 0; i <= 512; i += step) {
@@ -59,8 +56,7 @@ function createProceduralPavingTexture(maxAnisotropy: number): THREE.CanvasTextu
     ctx.stroke();
   }
 
-  // Subtle joint intersections
-  ctx.fillStyle = '#94a3b8';
+  ctx.fillStyle = '#CBCBCB';
   for (let x = 0; x <= 512; x += step) {
     for (let y = 0; y <= 512; y += step) {
       ctx.fillRect(x - 2, y - 2, 4, 4);
@@ -82,9 +78,9 @@ function createRadialContactShadowTexture(): THREE.CanvasTexture {
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
   const grad = ctx.createRadialGradient(128, 128, 16, 128, 128, 120);
-  grad.addColorStop(0, 'rgba(15, 23, 42, 0.55)');
-  grad.addColorStop(0.6, 'rgba(15, 23, 42, 0.22)');
-  grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+  grad.addColorStop(0, 'rgba(15, 14, 71, 0.55)');
+  grad.addColorStop(0.6, 'rgba(15, 14, 71, 0.22)');
+  grad.addColorStop(1, 'rgba(15, 14, 71, 0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
 
@@ -112,7 +108,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     y: number;
   } | null>(null);
 
-  // Refs for mutable interaction state without tearing down WebGL canvas
   const unitsRef = useRef<PropertyUnit[]>(units);
   unitsRef.current = units;
 
@@ -148,7 +143,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     const mount = canvasMountRef.current;
     if (!mount) return;
 
-    // 1. Software-WebGL Detection Guard
     const isSoftwareGl = (() => {
       const gl = document.createElement('canvas').getContext('webgl2');
       if (!gl) return true;
@@ -160,7 +154,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     })();
 
     const width = mount.clientWidth || 960;
-    const height = mount.clientHeight || 580;
+    const height = mount.clientHeight || 520;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
@@ -169,7 +163,9 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(
+      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2)
+    );
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -178,11 +174,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const skyHex = 0x0f172a;
+    const skyHex = 0x0b0b1e; // Dark Eclipse sky
     scene.background = new THREE.Color(skyHex);
     scene.fog = new THREE.FogExp2(skyHex, 0.014);
 
-    // 2. Studio Environment Map via RoomEnvironment + PMREMGenerator
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envTarget = pmremGenerator.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = envTarget.texture;
@@ -200,12 +195,11 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     controls.maxPolarAngle = Math.PI / 2 - 0.03;
     controls.update();
 
-    // 3. Balanced 3-Point Studio Lighting Rig
-    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.85);
+    const hemiLight = new THREE.HemisphereLight(0xe2e2f0, 0x121228, 0.85);
     hemiLight.position.set(0, 40, 0);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff7ed, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xffffe3, 2.2);
     keyLight.position.set(18, 28, 16);
     keyLight.castShadow = !isSoftwareGl;
     const d = 16;
@@ -220,11 +214,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     keyLight.shadow.normalBias = 0.02;
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x818cf8, 0.9);
+    const rimLight = new THREE.DirectionalLight(0x8686ac, 0.9);
     rimLight.position.set(-18, 16, -16);
     scene.add(rimLight);
 
-    // 4. Procedural Architectural Tower Assembly (Composite Multi-Part Groups)
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const pavingTex = createProceduralPavingTexture(maxAniso);
     const shadowTex = createRadialContactShadowTexture();
@@ -232,14 +225,16 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     const rootGroup = new THREE.Group();
     scene.add(rootGroup);
 
-    // Ground Plaza & Contact Shadow
     const groundMat = new THREE.MeshStandardMaterial({
       map: pavingTex,
       roughness: 0.82,
       metalness: 0.08,
-      color: 0x334155,
+      color: 0x26264a,
     });
-    const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), groundMat);
+    const groundMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(64, 64),
+      groundMat
+    );
     groundMesh.rotation.x = -Math.PI / 2;
     groundMesh.position.y = 0;
     groundMesh.receiveShadow = true;
@@ -258,20 +253,19 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     contactShadowPlane.position.y = 0.02;
     rootGroup.add(contactShadowPlane);
 
-    // Podium Base Group (4 distinct architectural parts)
     const podiumGroup = new THREE.Group();
     const podiumStoneMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
+      color: 0x171731,
       roughness: 0.65,
       metalness: 0.2,
     });
     const podiumTrimMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8,
+      color: 0xa6b4c3,
       roughness: 0.3,
       metalness: 0.75,
     });
     const atriumGlassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x93c5fd,
+      color: 0xc6c6df,
       roughness: 0.12,
       metalness: 0.1,
       transmission: isSoftwareGl ? 0 : 0.75,
@@ -280,22 +274,30 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       ior: 1.5,
     });
 
-    const podiumPlinth = new THREE.Mesh(new THREE.BoxGeometry(14.5, 0.7, 10.5), podiumStoneMat);
+    const podiumPlinth = new THREE.Mesh(
+      new THREE.BoxGeometry(14.5, 0.7, 10.5),
+      podiumStoneMat
+    );
     podiumPlinth.position.y = 0.35;
     podiumPlinth.castShadow = true;
     podiumPlinth.receiveShadow = true;
     podiumGroup.add(podiumPlinth);
 
-    const lobbyAtrium = new THREE.Mesh(new THREE.BoxGeometry(11.6, 1.3, 7.8), atriumGlassMat);
+    const lobbyAtrium = new THREE.Mesh(
+      new THREE.BoxGeometry(11.6, 1.3, 7.8),
+      atriumGlassMat
+    );
     lobbyAtrium.position.y = 1.35;
     podiumGroup.add(lobbyAtrium);
 
-    const podiumCanopy = new THREE.Mesh(new THREE.BoxGeometry(13.2, 0.25, 9.2), podiumTrimMat);
+    const podiumCanopy = new THREE.Mesh(
+      new THREE.BoxGeometry(13.2, 0.25, 9.2),
+      podiumTrimMat
+    );
     podiumCanopy.position.y = 2.1;
     podiumCanopy.castShadow = true;
     podiumGroup.add(podiumCanopy);
 
-    // Entrance Porte-Cochère columns
     const colGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.4, 16);
     [-4.8, -1.6, 1.6, 4.8].forEach((cx) => {
       [-3.8, 3.8].forEach((cz) => {
@@ -307,10 +309,18 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
     rootGroup.add(podiumGroup);
 
-    // Landscaped Perimeter Trees (Composite 3-part procedural trees)
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.85 });
-    const canopyMat1 = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6 });
-    const canopyMat2 = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.5 });
+    const trunkMat = new THREE.MeshStandardMaterial({
+      color: 0x5c4033,
+      roughness: 0.85,
+    });
+    const canopyMat1 = new THREE.MeshStandardMaterial({
+      color: 0x2e7d5b,
+      roughness: 0.6,
+    });
+    const canopyMat2 = new THREE.MeshStandardMaterial({
+      color: 0x3b946e,
+      roughness: 0.5,
+    });
 
     const treePositions: [number, number][] = [
       [-9.2, 6.2],
@@ -326,29 +336,37 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       const scale = 0.9 + (i % 3) * 0.1;
       tree.scale.setScalar(scale);
 
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 10), trunkMat);
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.18, 1.1, 10),
+        trunkMat
+      );
       trunk.position.y = 0.55;
       tree.add(trunk);
 
-      const lowerCrown = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.5, 12), canopyMat1);
+      const lowerCrown = new THREE.Mesh(
+        new THREE.ConeGeometry(0.85, 1.5, 12),
+        canopyMat1
+      );
       lowerCrown.position.y = 1.55;
       tree.add(lowerCrown);
 
-      const upperCrown = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.2, 12), canopyMat2);
+      const upperCrown = new THREE.Mesh(
+        new THREE.ConeGeometry(0.62, 1.2, 12),
+        canopyMat2
+      );
       upperCrown.position.y = 2.3;
       tree.add(upperCrown);
 
       rootGroup.add(tree);
     });
 
-    // Central Elevator Core
     const maxFloor = project.floors;
     const floorHeight = 1.65;
     const baseElevation = 2.25;
     const coreHeight = maxFloor * floorHeight + 1.4;
 
     const coreMat = new THREE.MeshStandardMaterial({
-      color: 0x334155,
+      color: 0x272757,
       roughness: 0.45,
       metalness: 0.35,
     });
@@ -361,38 +379,39 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     coreTower.receiveShadow = true;
     rootGroup.add(coreTower);
 
-    // Status Materials Cache for Units
+    // Status Materials synced to Blue Eclipse + Ink Wash specification:
+    // Available #2E7D5B · On hold #9A6410 · Sold #4A4A4A
     const statusPalette = {
       Available: {
-        base: 0x10b981,
-        emissive: 0x059669,
-        glass: 0x6ee7b7,
+        base: 0x2e7d5b,
+        emissive: 0x1d523b,
+        glass: 0xa7f3d0,
       },
       Hold: {
-        base: 0xf59e0b,
-        emissive: 0xd97706,
+        base: 0x9a6410,
+        emissive: 0x6b450b,
         glass: 0xfde68a,
       },
       Sold: {
-        base: 0x475569,
-        emissive: 0x1e293b,
-        glass: 0x94a3b8,
+        base: 0x4a4a4a,
+        emissive: 0x262626,
+        glass: 0xa3a3a0,
       },
     };
 
     const slabMat = new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
+      color: 0xedede7,
       roughness: 0.55,
       metalness: 0.15,
     });
     const balconyRailingMat = new THREE.MeshStandardMaterial({
-      color: 0xcbd5e1,
+      color: 0xcbcbcb,
       roughness: 0.25,
       metalness: 0.7,
     });
 
-    // Build Floors & Selectable Unit Bays
-    const floorGroups: { floor: number; group: THREE.Group; baseY: number }[] = [];
+    const floorGroups: { floor: number; group: THREE.Group; baseY: number }[] =
+      [];
     const clickableMeshes: THREE.Mesh[] = [];
     const unitVisualMap = new Map<
       string,
@@ -404,9 +423,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       }
     >();
 
-    // Stack offsets for the 4 units per floor:
-    // Stack 1: Wing A Front-Left, Stack 2: Wing A Back-Left, Stack 3: Wing B Front-Right, Stack 4: Wing B Back-Right
-    const stackCoords: Record<number, { x: number; z: number; balconyDir: number }> = {
+    const stackCoords: Record<
+      number,
+      { x: number; z: number; balconyDir: number }
+    > = {
       1: { x: -3.7, z: 1.85, balconyDir: 1 },
       2: { x: -3.7, z: -1.85, balconyDir: -1 },
       3: { x: 3.7, z: 1.85, balconyDir: 1 },
@@ -418,8 +438,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       const baseY = baseElevation + (f - 1) * floorHeight;
       floorGroup.position.y = baseY;
 
-      // Floor structural slab
-      const floorSlab = new THREE.Mesh(new THREE.BoxGeometry(11.8, 0.16, 7.6), slabMat);
+      const floorSlab = new THREE.Mesh(
+        new THREE.BoxGeometry(11.8, 0.16, 7.6),
+        slabMat
+      );
       floorSlab.position.y = 0.08;
       floorSlab.castShadow = true;
       floorSlab.receiveShadow = true;
@@ -433,7 +455,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
         const pal = statusPalette[unit.status];
 
-        // 1. Primary Apartment Volume
         const bodyMat = new THREE.MeshStandardMaterial({
           color: pal.base,
           roughness: 0.35,
@@ -450,7 +471,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
         clickableMeshes.push(bodyMesh);
         unitGroup.add(bodyMesh);
 
-        // 2. Architectural Mullion Frame & Window Glazing
         const glassFacade = new THREE.Mesh(
           new THREE.BoxGeometry(3.4, 0.92, 0.08),
           new THREE.MeshStandardMaterial({
@@ -462,7 +482,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
         glassFacade.position.set(0, 0.66, coord.balconyDir * 1.51);
         unitGroup.add(glassFacade);
 
-        // 3. Cantilevered Balcony Slab & Balustrade
         const balconySlab = new THREE.Mesh(
           new THREE.BoxGeometry(3.5, 0.1, 0.65),
           slabMat
@@ -477,7 +496,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
         balconyRail.position.set(0, 0.28, coord.balconyDir * 2.08);
         unitGroup.add(balconyRail);
 
-        // 4. Status Beacon Fascia Strip
         const beaconMat = new THREE.MeshStandardMaterial({
           color: pal.base,
           emissive: pal.base,
@@ -491,11 +509,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
         beaconStrip.position.set(0, 1.22, coord.balconyDir * 1.54);
         unitGroup.add(beaconStrip);
 
-        // 5. Selection Highlight Wireframe Cage
         const outlineMesh = new THREE.Mesh(
           new THREE.BoxGeometry(4.06, 1.38, 3.16),
           new THREE.MeshBasicMaterial({
-            color: 0x6366f1,
+            color: 0xffffe3,
             wireframe: true,
             transparent: true,
             opacity: 0.95,
@@ -519,24 +536,29 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       floorGroups.push({ floor: f, group: floorGroup, baseY });
     }
 
-    // Rooftop Architectural Crown Group (Sky Deck & Pergola Fins)
     const crownGroup = new THREE.Group();
     const crownBaseY = baseElevation + maxFloor * floorHeight;
     crownGroup.position.y = crownBaseY;
 
-    const roofDeck = new THREE.Mesh(new THREE.BoxGeometry(12.2, 0.28, 8.0), slabMat);
+    const roofDeck = new THREE.Mesh(
+      new THREE.BoxGeometry(12.2, 0.28, 8.0),
+      slabMat
+    );
     roofDeck.position.y = 0.14;
     crownGroup.add(roofDeck);
 
     const crownFinMat = new THREE.MeshStandardMaterial({
-      color: 0x4f46e5,
+      color: 0x505081,
       roughness: 0.25,
       metalness: 0.8,
-      emissive: 0x312e81,
+      emissive: 0x272757,
       emissiveIntensity: 0.35,
     });
     [-4.5, -2.2, 0, 2.2, 4.5].forEach((fx) => {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.1, 6.8), crownFinMat);
+      const fin = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 1.1, 6.8),
+        crownFinMat
+      );
       fin.position.set(fx, 0.78, 0);
       crownGroup.add(fin);
     });
@@ -554,12 +576,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
     rootGroup.add(crownGroup);
 
-    // Pre-warm shaders on hardware WebGL
     if (!isSoftwareGl) {
       renderer.compile(scene, camera);
     }
 
-    // 5. On-Demand Coalesced Render Loop + Software-WebGL Pacing
     let frameId = 0;
     let renderBusy = false;
     let renderDirty = false;
@@ -568,7 +588,9 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
     function afterDraw(cb: () => void) {
       const gl = renderer.getContext() as WebGL2RenderingContext;
-      const sync = gl.fenceSync ? gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0) : null;
+      const sync = gl.fenceSync
+        ? gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)
+        : null;
       gl.flush();
       const poll = () => {
         if (isDisposed) return;
@@ -596,8 +618,9 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
         const dt = Math.min(clock.getDelta(), 0.1) || 0.016;
         let needsMoreFrames = false;
 
-        // Smooth exponential damping for Floor Explode separation
-        const expDiff = Math.abs(explodeTargetRef.current - explodeCurrentRef.current);
+        const expDiff = Math.abs(
+          explodeTargetRef.current - explodeCurrentRef.current
+        );
         if (expDiff > 0.002) {
           explodeCurrentRef.current = THREE.MathUtils.damp(
             explodeCurrentRef.current,
@@ -614,14 +637,15 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
           needsMoreFrames = true;
         }
 
-        // Smooth exponential damping for Camera Presets
         if (activeCameraTransitionRef.current.active) {
           const factor = 1 - Math.exp(-7 * dt);
           camera.position.lerp(activeCameraTransitionRef.current.pos, factor);
           controls.target.lerp(activeCameraTransitionRef.current.look, factor);
           if (
-            camera.position.distanceTo(activeCameraTransitionRef.current.pos) < 0.08 &&
-            controls.target.distanceTo(activeCameraTransitionRef.current.look) < 0.08
+            camera.position.distanceTo(activeCameraTransitionRef.current.pos) <
+              0.08 &&
+            controls.target.distanceTo(activeCameraTransitionRef.current.look) <
+              0.08
           ) {
             activeCameraTransitionRef.current.active = false;
           } else {
@@ -648,7 +672,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       });
     }
 
-    // Cancel scripted camera transition when user manually drags OrbitControls
     const onControlStart = () => {
       activeCameraTransitionRef.current.active = false;
     };
@@ -658,7 +681,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     controls.addEventListener('start', onControlStart);
     controls.addEventListener('change', onControlChange);
 
-    // Sync unit materials when status, filter, or selection changes
     function syncUnitMaterials() {
       const filterSet = visibleUnitIdsRef.current;
       unitsRef.current.forEach((u) => {
@@ -670,7 +692,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
         vis.unitGroup.visible = isVisibleByFilter;
         vis.bodyMat.color.setHex(pal.base);
-        vis.bodyMat.emissive.setHex(isSelected ? 0x4f46e5 : pal.emissive);
+        vis.bodyMat.emissive.setHex(isSelected ? 0x505081 : pal.emissive);
         vis.bodyMat.emissiveIntensity = isSelected ? 0.5 : 0.18;
         vis.beaconMat.color.setHex(pal.base);
         vis.beaconMat.emissive.setHex(pal.base);
@@ -681,23 +703,23 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
     function applyLightingMood(mood: LightingMood) {
       if (mood === 'golden') {
-        const sunsetHex = 0x1e1b4b;
+        const sunsetHex = 0x0f0e47;
         scene.background = new THREE.Color(sunsetHex);
         scene.fog = new THREE.FogExp2(sunsetHex, 0.014);
         keyLight.color.setHex(0xfdba74);
-        keyLight.intensity = 2.6;
+        keyLight.intensity = 2.5;
         keyLight.position.set(24, 14, 18);
-        hemiLight.color.setHex(0xfde68a);
-        hemiLight.groundColor.setHex(0x1e1b4b);
+        hemiLight.color.setHex(0xffffe3);
+        hemiLight.groundColor.setHex(0x0f0e47);
       } else {
-        const dayHex = 0x0f172a;
+        const dayHex = 0x0b0b1e;
         scene.background = new THREE.Color(dayHex);
         scene.fog = new THREE.FogExp2(dayHex, 0.014);
-        keyLight.color.setHex(0xfff7ed);
+        keyLight.color.setHex(0xffffe3);
         keyLight.intensity = 2.2;
         keyLight.position.set(18, 28, 16);
-        hemiLight.color.setHex(0xdbeafe);
-        hemiLight.groundColor.setHex(0x1e293b);
+        hemiLight.color.setHex(0xe2e2f0);
+        hemiLight.groundColor.setHex(0x121228);
       }
       requestRender();
     }
@@ -708,7 +730,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       applyLightingMood,
     };
 
-    // Raycasting for Click & Throttled Hover
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let pointerDownPos = { x: 0, y: 0 };
@@ -719,8 +740,11 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-      if (dist > 6) return; // Ignore orbit drag
+      const dist = Math.hypot(
+        e.clientX - pointerDownPos.x,
+        e.clientY - pointerDownPos.y
+      );
+      if (dist > 6) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -781,7 +805,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     const handleResize = () => {
       if (!mount || isDisposed) return;
       const w = mount.clientWidth || 960;
-      const h = mount.clientHeight || 580;
+      const h = mount.clientHeight || 520;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -789,7 +813,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     };
     window.addEventListener('resize', handleResize);
 
-    // Initial render
     requestRender();
 
     return () => {
@@ -809,7 +832,6 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     };
   }, [project.id, project.floors]);
 
-  // Synchronize materials whenever unit statuses, filter dropdown, or selectedUnitId change
   useEffect(() => {
     sceneControllerRef.current?.syncUnitMaterials();
   }, [units, visibleUnitIds, selectedUnitId]);
@@ -849,134 +871,118 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[460px] sm:h-[600px] rounded-xl overflow-hidden border border-slate-800 bg-slate-950 select-none">
-      {/* Isolated WebGL Canvas Mount Container */}
+    <div className="relative w-full h-[460px] sm:h-[520px] rounded-[10px] overflow-hidden border border-[var(--border)] bg-[#0B0B1E] select-none">
       <div ref={canvasMountRef} className="w-full h-full" />
 
-      {/* Top-Left Minimal Spec & Legend Overlay (Solid RGBA surface, no backdrop-filter over WebGL) */}
-      <div
-        className="absolute top-3 left-3 right-3 sm:right-auto sm:top-4 sm:left-4 z-10 pointer-events-none flex flex-wrap items-center gap-2.5 sm:gap-4 px-3 py-2 rounded-lg border border-slate-700/80 text-[11px] sm:text-xs text-slate-200"
-        style={{ backgroundColor: 'rgba(15, 23, 42, 0.92)' }}
-      >
-        <span className="font-semibold text-white">{project.name} · 3D</span>
-        <span className="text-slate-500 hidden sm:inline">·</span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block" />
-          <span>Avail</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-amber-500 inline-block" />
-          <span>Hold</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-slate-500 inline-block" />
-          <span>Sold</span>
-        </span>
-        <span className="text-slate-400 hidden md:inline">· Tap any 3D apartment bay to inspect</span>
-      </div>
-
-      {/* Hover Unit Floating Tooltip */}
       {hoveredUnit && (
         <div
-          className="hidden sm:block absolute z-20 pointer-events-none px-3 py-2 rounded-lg border border-slate-700 text-xs text-white shadow-xl"
+          className="hidden sm:block absolute z-20 pointer-events-none px-3 py-2 rounded-[6px] border border-[#26264A] t-12 text-[#EEEEF4] shadow-eclipse"
           style={{
             left: Math.min(hoveredUnit.x + 14, 720),
             top: Math.max(hoveredUnit.y - 56, 12),
-            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            backgroundColor: '#0F0E47',
           }}
         >
-          <div className="flex items-center gap-2 font-semibold">
-            <span className="font-mono">Unit {hoveredUnit.unit.unitNumber}</span>
+          <div className="flex items-center gap-2 font-medium">
+            <span className="font-mono tabular-nums">
+              Unit {hoveredUnit.unit.unitNumber}
+            </span>
             <span>·</span>
             <span>{hoveredUnit.unit.bhk}</span>
             <span>·</span>
-            <span
-              className={
-                hoveredUnit.unit.status === 'Available'
-                  ? 'text-emerald-400'
-                  : hoveredUnit.unit.status === 'Hold'
-                  ? 'text-amber-400'
-                  : 'text-slate-400'
-              }
-            >
-              {hoveredUnit.unit.status}
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{
+                  backgroundColor:
+                    hoveredUnit.unit.status === 'Available'
+                      ? '#2E7D5B'
+                      : hoveredUnit.unit.status === 'Hold'
+                      ? '#9A6410'
+                      : '#8686AC',
+                }}
+              />
+              <span>
+                {hoveredUnit.unit.status === 'Hold'
+                  ? 'On hold'
+                  : hoveredUnit.unit.status}
+              </span>
             </span>
           </div>
-          <div className="text-slate-300 font-mono mt-0.5">
-            {hoveredUnit.unit.carpetAreaSqFt} sq.ft · {formatInrCompact(getUnitAllInclusivePrice(hoveredUnit.unit))}
+          <div className="text-[#A9A9C6] font-mono tabular-nums mt-0.5">
+            {hoveredUnit.unit.carpetAreaSqFt.toLocaleString('en-IN')} sq ft ·{' '}
+            {formatInrCompact(getUnitAllInclusivePrice(hoveredUnit.unit))}
           </div>
         </div>
       )}
 
-      {/* Unified Collapsible Bottom Control Dock (Zero Viewport Occlusion, solid RGBA surface) */}
       <div
-        className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]"
-        style={{ width: 'min(860px, 95vw)' }}
+        className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]"
+        style={{ width: 'min(780px, 95vw)' }}
       >
         <button
           type="button"
           onClick={() => setDockCollapsed((prev) => !prev)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-t-md border border-b-0 border-slate-700 text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
-          style={{ backgroundColor: 'rgba(15, 23, 42, 0.94)' }}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-t-[6px] border border-b-0 border-[#26264A] t-12 text-[#A9A9C6] hover:text-[#FFFFE3] transition-colors cursor-pointer"
+          style={{ backgroundColor: '#0F0E47' }}
         >
           {dockCollapsed ? (
             <>
               <ChevronUp className="w-3.5 h-3.5" />
-              <span>Show 3D Controls</span>
+              <span>Controls</span>
             </>
           ) : (
             <>
               <ChevronDown className="w-3.5 h-3.5" />
-              <span>Hide Controls</span>
+              <span>Hide</span>
             </>
           )}
         </button>
 
         {!dockCollapsed && (
           <div
-            className="w-full px-3 sm:px-4 py-2.5 rounded-xl border border-slate-700/90 flex flex-wrap items-center justify-between gap-2.5 sm:gap-4 text-xs text-slate-200 shadow-2xl"
-            style={{ backgroundColor: 'rgba(15, 23, 42, 0.94)' }}
+            className="w-full px-3 py-2 rounded-[10px] border border-[#26264A] flex flex-wrap items-center justify-between gap-3 t-12 text-[#E4E4F2] shadow-eclipse"
+            style={{ backgroundColor: '#0F0E47' }}
           >
-            {/* Floor Explode Slider */}
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-              <div className="flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
-                <label htmlFor="floor-explode-slider" className="font-medium whitespace-nowrap">
-                  Explode Floors
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="floor-explode-slider"
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.02}
-                  value={explodeFactor}
-                  onChange={(e) => handleExplodeChange(parseFloat(e.target.value))}
-                  className="w-24 sm:w-24 accent-indigo-500 cursor-pointer"
-                />
-                {explodeFactor > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleExplodeChange(0)}
-                    className="text-slate-400 hover:text-white cursor-pointer"
-                    title="Reset floor separation"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+            <div className="flex items-center gap-2">
+              <Layers className="w-3.5 h-3.5 text-[#8686AC] shrink-0" />
+              <label
+                htmlFor="floor-explode-slider"
+                className="whitespace-nowrap text-[#A9A9C6]"
+              >
+                Separate floors
+              </label>
+              <input
+                id="floor-explode-slider"
+                type="range"
+                min={0}
+                max={1}
+                step={0.02}
+                value={explodeFactor}
+                onChange={(e) =>
+                  handleExplodeChange(parseFloat(e.target.value))
+                }
+                className="w-20 accent-[#FFFFE3] cursor-pointer"
+              />
+              {explodeFactor > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleExplodeChange(0)}
+                  className="text-[#A9A9C6] hover:text-[#FFFFE3] cursor-pointer"
+                  aria-label="Reset floor separation"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            {/* Camera Elevation Presets */}
-            <div className="flex items-center gap-1 overflow-x-auto max-w-full">
-              <Camera className="w-3.5 h-3.5 text-slate-400 mr-1 shrink-0 hidden sm:inline" />
+            <div className="flex items-center gap-1">
+              <Camera className="w-3.5 h-3.5 text-[#8686AC] mr-1 shrink-0 hidden sm:inline" />
               {(
                 [
-                  { id: 'isometric', label: 'Aerial SW' },
+                  { id: 'isometric', label: 'Aerial' },
                   { id: 'front', label: 'Facade' },
-                  { id: 'crown', label: 'Sky Villas' },
+                  { id: 'crown', label: 'Crown' },
                   { id: 'podium', label: 'Podium' },
                 ] as { id: CameraPresetKey; label: string }[]
               ).map((preset) => (
@@ -984,10 +990,10 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
                   key={preset.id}
                   type="button"
                   onClick={() => handleCameraPreset(preset.id)}
-                  className={`px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`px-2 py-1 rounded-[6px] t-12 transition-colors cursor-pointer ${
                     activePreset === preset.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? 'bg-[#FFFFE3] text-[#0F0E47] font-medium'
+                      : 'text-[#A9A9C6] hover:bg-[#1B1A4E] hover:text-white'
                   }`}
                 >
                   {preset.label}
@@ -995,31 +1001,30 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
               ))}
             </div>
 
-            {/* Studio Lighting Preset */}
-            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <div className="flex items-center gap-1 bg-[#08072E] p-0.5 rounded-[6px] border border-[#26264A]">
               <button
                 type="button"
                 onClick={() => handleLightingToggle('daylight')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] t-12 transition-colors cursor-pointer ${
                   lightingMood === 'daylight'
-                    ? 'bg-slate-800 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-[#272757] text-[#FFFFE3]'
+                    : 'text-[#8686AC] hover:text-white'
                 }`}
               >
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <Sun className="w-3 h-3" />
                 <span>Day</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleLightingToggle('golden')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] t-12 transition-colors cursor-pointer ${
                   lightingMood === 'golden'
-                    ? 'bg-slate-800 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-[#272757] text-[#FFFFE3]'
+                    : 'text-[#8686AC] hover:text-white'
                 }`}
               >
-                <Sunset className="w-3.5 h-3.5 text-orange-400" />
-                <span>Sunset</span>
+                <Sunset className="w-3 h-3" />
+                <span>Dusk</span>
               </button>
             </div>
           </div>
@@ -1028,3 +1033,5 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
     </div>
   );
 };
+
+export default ThreeTowerView;

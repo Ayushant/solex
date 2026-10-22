@@ -1,20 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   useSolexStore,
   getUnitAllInclusivePrice,
-  formatInrCompact,
 } from '../store/useSolexStore';
 import {
-  X,
-  Building2,
-  Compass,
-  Maximize2,
-  CheckCircle2,
-  Clock,
-  Lock,
-  ArrowRight,
-  ShieldCheck,
-} from 'lucide-react';
+  formatInr,
+  formatInrFull,
+  formatArea,
+  UnitStatusBadge,
+  SectionTitle,
+} from '../lib/formatters';
+import { X } from 'lucide-react';
 
 export const UnitSlideOver: React.FC = () => {
   const {
@@ -27,6 +23,8 @@ export const UnitSlideOver: React.FC = () => {
     updateUnitStatus,
     openBookingModal,
   } = useSolexStore();
+
+  const [confirmingHold, setConfirmingHold] = useState(false);
 
   if (!selectedUnitId) return null;
 
@@ -52,256 +50,363 @@ export const UnitSlideOver: React.FC = () => {
     (agreementValue * (project?.brokerSharePct ?? 2.0)) / 100
   );
 
+  const isExpiredHold = unit.status === 'Hold' && unit.floor % 7 === 0;
+  const holdTimerLabel = isExpiredHold
+    ? 'Hold expired 2h ago'
+    : `Hold ends in ${(unit.floor % 9) + 2}h ${(unit.carpetAreaSqFt % 45) + 10}m`;
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/40 transition-opacity"
-        onClick={() => setSelectedUnitId(null)}
+        className="fixed inset-0 bg-black/30 transition-opacity"
+        onClick={() => {
+          setConfirmingHold(false);
+          setSelectedUnitId(null);
+        }}
       />
 
-      {/* Right Slide-Over Panel */}
-      <aside className="relative z-50 w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col justify-between overflow-y-auto">
-        <div>
-          {/* Top Header */}
-          <div className="p-6 border-b border-slate-200 flex items-start justify-between gap-4">
+      {/* 480px Right Drawer */}
+      <aside
+        role="dialog"
+        aria-label={`Unit ${unit.unitNumber} details`}
+        className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+      >
+        <div className="divide-y divide-[var(--border)]">
+          {/* Ivory Header Strip */}
+          <div
+            className="p-5 flex items-start justify-between gap-4 border-b"
+            style={{
+              backgroundColor: 'var(--ivory-band)',
+              borderColor: 'var(--ivory-band-border)',
+            }}
+          >
             <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="t-12 text-[var(--text-secondary)] flex items-center gap-1.5">
                 <span>{project?.name}</span>
                 <span>·</span>
                 <span>{unit.wing}</span>
                 <span>·</span>
-                <span>Floor {unit.floor}</span>
+                <span className="t-mono">Floor {unit.floor}</span>
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <h2 className="text-2xl font-bold text-slate-900 font-mono">
+                <h2 className="t-22-title text-[var(--text-primary)] t-mono">
                   Unit {unit.unitNumber}
                 </h2>
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border ${
-                    unit.status === 'Available'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : unit.status === 'Hold'
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-300'
-                  }`}
-                >
-                  {unit.status === 'Available' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                  {unit.status === 'Hold' && <Clock className="w-3.5 h-3.5" />}
-                  {unit.status === 'Sold' && <Lock className="w-3.5 h-3.5" />}
-                  <span>{unit.status}</span>
-                </span>
+                <UnitStatusBadge status={unit.status} />
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedUnitId(null)}
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-              aria-label="Close unit inspector"
+              onClick={() => {
+                setConfirmingHold(false);
+                setSelectedUnitId(null);
+              }}
+              className="btn-ghost btn-sm px-2"
+              aria-label="Close unit drawer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Unit Specifications Grid */}
-          <div className="p-6 border-b border-slate-200">
-            <h3 className="text-xs font-semibold text-slate-500 tracking-wide mb-3">
-              Architectural Specifications
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80">
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Configuration</span>
+          {/* Hold timer banner if on Hold */}
+          {unit.status === 'Hold' && (
+            <div className="px-5 py-3 bg-[var(--subtle)] flex items-center justify-between gap-3">
+              <div className="t-13 text-[var(--text-secondary)]">
+                {heldLead
+                  ? `Held for ${heldLead.buyerName}`
+                  : '24h inventory hold active'}
+              </div>
+              <span
+                className={`t-12 t-mono ${
+                  isExpiredHold
+                    ? 'text-[var(--status-blocked)]'
+                    : 'text-[var(--status-hold)]'
+                }`}
+              >
+                {holdTimerLabel}
+              </span>
+            </div>
+          )}
+
+          {/* Unit Specs */}
+          <div className="p-5">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <div className="t-12 text-[var(--text-tertiary)]">
+                  Configuration
                 </div>
-                <div className="text-sm font-semibold text-slate-900 mt-1">
+                <div className="t-13-medium text-[var(--text-primary)] mt-0.5">
                   {unit.bhk}
                 </div>
               </div>
-
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80">
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>RERA Carpet Area</span>
+              <div>
+                <div className="t-12 text-[var(--text-tertiary)]">
+                  Carpet area
                 </div>
-                <div className="text-sm font-semibold text-slate-900 font-mono mt-1">
-                  {unit.carpetAreaSqFt.toLocaleString('en-IN')} sq.ft
+                <div className="t-13-medium text-[var(--text-primary)] t-mono mt-0.5">
+                  {formatArea(unit.carpetAreaSqFt)}
                 </div>
               </div>
-
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 col-span-2">
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Compass className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Primary Orientation & View</span>
+              <div>
+                <div className="t-12 text-[var(--text-tertiary)]">
+                  Orientation
                 </div>
-                <div className="text-sm font-semibold text-slate-900 mt-1">
+                <div className="t-13-medium text-[var(--text-primary)] mt-0.5">
                   {unit.facing}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* All-Inclusive Mandate Cost Sheet */}
-          <div className="p-6 border-b border-slate-200">
+          {/* Cost Sheet (Total in Eclipse 800) */}
+          <div className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-slate-500 tracking-wide">
-                Mandate Cost Sheet Breakdown
-              </h3>
-              <span className="text-xs text-slate-400 font-mono">
-                Rev v{unit.version}.0
+              <SectionTitle>Cost sheet</SectionTitle>
+              <span className="t-12 t-mono text-[var(--text-tertiary)]">
+                v{unit.version}.0
               </span>
             </div>
 
-            <div className="space-y-2.5 text-sm">
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Base Price ({unit.carpetAreaSqFt} sq.ft)</span>
-                <span className="font-mono text-slate-900">
-                  {formatInrCompact(unit.basePriceInr)}
+            <div className="space-y-2 t-13">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">
+                  Base price ({formatArea(unit.carpetAreaSqFt)})
                 </span>
-              </div>
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Floor Rise Premium (Floor {unit.floor})</span>
-                <span className="font-mono text-slate-900">
-                  {formatInrCompact(unit.floorRiseInr)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Preferential Location Charge (PLC)</span>
-                <span className="font-mono text-slate-900">
-                  {formatInrCompact(unit.plcInr)}
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(unit.basePriceInr)}
+                >
+                  {formatInr(unit.basePriceInr)}
                 </span>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between font-semibold text-slate-900">
-                <span>Agreement Value</span>
-                <span className="font-mono text-base text-indigo-600">
-                  {formatInrCompact(agreementValue)}
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">
+                  Preferential location charge (PLC)
+                </span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(unit.plcInr)}
+                >
+                  {formatInr(unit.plcInr)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                <span>Est. GST (5%) + Stamp Duty (6%)</span>
-                <span className="font-mono">
-                  {formatInrCompact(gstEstimate + stampDutyEstimate)}
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">
+                  Floor rise (Floor {unit.floor})
+                </span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(unit.floorRiseInr)}
+                >
+                  {formatInr(unit.floorRiseInr)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700">
-                <span>All-Inclusive Buyer Outflow</span>
-                <span className="font-mono">{formatInrCompact(totalOutflow)}</span>
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between font-medium">
+                <span className="text-[var(--text-primary)]">
+                  Agreement value
+                </span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(agreementValue)}
+                >
+                  {formatInr(agreementValue)}
+                </span>
               </div>
-            </div>
 
-            {/* Channel Partner Brokerage Callout */}
-            <div className="mt-4 p-3.5 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-semibold text-indigo-950">
-                  Channel Partner Commission ({project?.brokerSharePct}%)
-                </div>
-                <div className="text-xs text-indigo-700 mt-0.5">
-                  Triggered automatically upon booking allotment
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">GST (5.0%)</span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(gstEstimate)}
+                >
+                  {formatInr(gstEstimate)}
+                </span>
               </div>
-              <div className="text-sm font-bold font-mono text-indigo-700">
-                {formatInrCompact(estimatedBrokerCommission)}
+
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">
+                  Stamp duty estimate (6.0%)
+                </span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(stampDutyEstimate)}
+                >
+                  {formatInr(stampDutyEstimate)}
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between font-semibold">
+                <span className="text-[var(--text-primary)]">Total</span>
+                <span
+                  className="t-16 t-mono text-[var(--money-total)] text-right"
+                  title={formatInrFull(totalOutflow)}
+                >
+                  {formatInr(totalOutflow)}
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[var(--text-secondary)]">
+                <span>
+                  Channel partner share (
+                  {(project?.brokerSharePct ?? 2).toFixed(1)}%)
+                </span>
+                <span
+                  className="t-mono text-[var(--text-primary)] text-right"
+                  title={formatInrFull(estimatedBrokerCommission)}
+                >
+                  {formatInr(estimatedBrokerCommission)}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Attribution / Hold / Booking Details */}
-          <div className="p-6">
-            {unit.status === 'Sold' && (
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Allotment Confirmed & Locked</span>
-                </div>
-                <div className="text-xs text-slate-600 space-y-1">
+          {/* Status History */}
+          <div className="p-5">
+            <div className="mb-3">
+              <SectionTitle>Status history</SectionTitle>
+            </div>
+            <div className="space-y-2.5 t-13">
+              {unit.status === 'Sold' && (
+                <div className="flex items-baseline justify-between gap-3">
                   <div>
-                    <span className="text-slate-500">Allotted Buyer: </span>
-                    <span className="font-semibold text-slate-900">
-                      {bookedLead ? bookedLead.buyerName : 'Institutional / Direct HNI Allottee'}
+                    <span className="text-[var(--text-primary)] font-medium">
+                      Booked
+                    </span>
+                    <span className="text-[var(--text-secondary)]">
+                      {' '}
+                      ·{' '}
+                      {bookedLead
+                        ? bookedLead.buyerName
+                        : 'Direct allotment'}{' '}
+                      ({bookedBroker ? bookedBroker.firmName : 'soleX Direct'})
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Channel Partner: </span>
-                    <span className="font-semibold text-slate-900">
-                      {bookedBroker
-                        ? `${bookedBroker.name} (${bookedBroker.firmName})`
-                        : 'soleX Direct Mandate Desk'}
-                    </span>
-                  </div>
+                  <span className="t-12 t-mono text-[var(--text-tertiary)] shrink-0">
+                    21 Oct, 14:30
+                  </span>
                 </div>
-              </div>
-            )}
+              )}
 
-            {unit.status === 'Hold' && (
-              <div className="p-4 rounded-lg bg-amber-50/80 border border-amber-200 space-y-2">
-                <div className="text-xs font-semibold text-amber-900">
-                  24-Hour Inventory Hold Active
+              {unit.status === 'Hold' && (
+                <div className="flex items-baseline justify-between gap-3">
+                  <div>
+                    <span className="text-[var(--text-primary)] font-medium">
+                      Placed on 24h hold
+                    </span>
+                    <span className="text-[var(--text-secondary)]">
+                      {' '}
+                      · {heldLead ? heldLead.buyerName : 'Desk verification'}
+                    </span>
+                  </div>
+                  <span className="t-12 t-mono text-[var(--text-tertiary)] shrink-0">
+                    22 Oct, 10:15
+                  </span>
                 </div>
-                <div className="text-xs text-amber-800">
-                  {heldLead
-                    ? `Held for buyer '${heldLead.buyerName}' pending booking cheque clearance.`
-                    : 'Temporarily held by site sales desk for buyer KYC verification.'}
+              )}
+
+              <div className="flex items-baseline justify-between gap-3">
+                <div>
+                  <span className="text-[var(--text-primary)]">
+                    Released to mandate inventory
+                  </span>
+                  <span className="text-[var(--text-secondary)]">
+                    {' '}
+                    · Rev v1.0
+                  </span>
                 </div>
+                <span className="t-12 t-mono text-[var(--text-tertiary)] shrink-0">
+                  01 Oct, 09:00
+                </span>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        {/* Bottom Actions Footer */}
-        <div className="p-6 border-t border-slate-200 bg-slate-50 space-y-3">
+        {/* Footer Actions: "Hold 24h" (secondary) / "Book unit" (accent Eclipse 600) */}
+        <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)]">
           {unit.status !== 'Sold' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  const targetUnitId = unit.id;
-                  const targetProjectId = unit.projectId;
-                  const presetLeadId = unit.heldByLeadId;
-                  setSelectedUnitId(null);
-                  openBookingModal({
-                    unitId: targetUnitId,
-                    projectId: targetProjectId,
-                    leadId: presetLeadId,
-                  });
-                }}
-                className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer"
-              >
-                <span>Convert Unit {unit.unitNumber} to Booking</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2">
+            confirmingHold ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="t-13-medium text-[var(--text-primary)]">
+                  Hold unit {unit.unitNumber} for 24h?
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingHold(false)}
+                    className="btn-secondary btn-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateUnitStatus(unit.id, 'Hold');
+                      setConfirmingHold(false);
+                    }}
+                    className="btn-primary btn-sm"
+                  >
+                    Confirm hold
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-2">
                 {unit.status === 'Available' ? (
                   <button
                     type="button"
-                    onClick={() => updateUnitStatus(unit.id, 'Hold')}
-                    className="w-full py-2 px-3 rounded-lg bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 text-xs font-semibold transition-colors cursor-pointer"
+                    onClick={() => setConfirmingHold(true)}
+                    className="btn-secondary"
                   >
-                    Place Unit on 24h Hold
+                    Hold 24h
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => updateUnitStatus(unit.id, 'Available')}
-                    className="w-full py-2 px-3 rounded-lg bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-semibold transition-colors cursor-pointer"
+                    className="btn-secondary"
                   >
-                    Release Hold (Mark Available)
+                    Release hold
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetUnitId = unit.id;
+                    const targetProjectId = unit.projectId;
+                    const presetLeadId = unit.heldByLeadId;
+                    setSelectedUnitId(null);
+                    openBookingModal({
+                      unitId: targetUnitId,
+                      projectId: targetProjectId,
+                      leadId: presetLeadId,
+                    });
+                  }}
+                  className="btn-accent"
+                >
+                  Book unit
+                </button>
               </div>
-            </>
+            )
           ) : (
-            <button
-              type="button"
-              onClick={() => setSelectedUnitId(null)}
-              className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition-colors cursor-pointer"
-            >
-              Close Inspector
-            </button>
+            <div className="flex items-center justify-between">
+              <span className="t-12 text-[var(--text-tertiary)]">
+                Unit is allotted and locked
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedUnitId(null)}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+            </div>
           )}
         </div>
       </aside>

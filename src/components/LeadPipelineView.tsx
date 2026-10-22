@@ -2,20 +2,37 @@ import React, { useState } from 'react';
 import {
   useSolexStore,
   LeadStage,
-  formatInrCompact,
+  Lead,
 } from '../store/useSolexStore';
 import {
-  Kanban,
-  List,
+  formatInr,
+  formatInrFull,
+  formatRelativeAge,
+  formatShortDate,
+  maskPhone,
+  ProjectChip,
+  EmptyStateBlock,
+} from '../lib/formatters';
+import {
   Plus,
-  ArrowRight,
-  Phone,
   Search,
-  CheckCircle2,
   X,
+  Download,
+  MoreHorizontal,
+  ArrowUpDown,
+  Users,
 } from 'lucide-react';
 
 const STAGES: LeadStage[] = ['New', 'Site Visit', 'Negotiation', 'Booked'];
+
+const STAGE_COLORS: Record<LeadStage, string> = {
+  New: '#6D8196',         // Slate
+  'Site Visit': '#9A6410', // Hold / Bronze
+  Negotiation: '#3A3A6B',  // Eclipse 700
+  Booked: '#2E7D5B',       // Estate Green
+};
+
+type SortField = 'buyerName' | 'project' | 'budgetInr' | 'stage' | 'createdAt';
 
 export const LeadPipelineView: React.FC = () => {
   const {
@@ -31,9 +48,17 @@ export const LeadPipelineView: React.FC = () => {
   } = useSolexStore();
 
   const [displayMode, setDisplayMode] = useState<'kanban' | 'list'>('kanban');
+  const [mobileStage, setMobileStage] = useState<LeadStage>('New');
   const [searchQuery, setSearchQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState('All');
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [openMenuLeadId, setOpenMenuLeadId] = useState<string | null>(null);
+  const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<LeadStage | null>(null);
+
+  const [sortField, setSortField] = useState<SortField>('budgetInr');
+  const [sortAsc, setSortAsc] = useState(false);
 
   // New Lead Form State
   const [buyerName, setBuyerName] = useState('');
@@ -47,7 +72,6 @@ export const LeadPipelineView: React.FC = () => {
   const [assignedBrokerId, setAssignedBrokerId] = useState(activeBrokerId);
   const [notes, setNotes] = useState('');
 
-  // Scope leads if Broker role is active, then filter in real time by name or contact number
   const roleAndProjectLeads = leads.filter((l) => {
     if (role === 'Broker' && l.assignedBrokerId !== activeBrokerId) return false;
     if (projectFilter !== 'All' && l.projectId !== projectFilter) return false;
@@ -66,6 +90,78 @@ export const LeadPipelineView: React.FC = () => {
       l.phone.toLowerCase().replace(/[\s-]/g, '').includes(compactDigitsQuery);
     return matchesName || matchesRawPhone || matchesCompactPhone;
   });
+
+  const canViewPhone = (lead: Lead) =>
+    role === 'Admin' ||
+    (role === 'Broker' && lead.assignedBrokerId === activeBrokerId);
+
+  const escapeCsvCell = (value: string | number) => {
+    const str = String(value ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const handleExportLeadsCsv = () => {
+    const header = [
+      'Lead ID',
+      'Buyer Name',
+      'Contact Number',
+      'Email',
+      'Mandate Project',
+      'Interested Configuration',
+      'Target Budget (INR)',
+      'Pipeline Stage',
+      'Channel Partner Name',
+      'Brokerage Firm',
+      'Allotted Unit',
+      'Notes',
+      'Registered Date',
+    ];
+
+    const dataRows = scopedLeads.map((lead) => {
+      const proj = projects.find((p) => p.id === lead.projectId);
+      const brk = brokers.find((b) => b.id === lead.assignedBrokerId);
+      const bookedUnit = lead.bookedUnitId
+        ? units.find((u) => u.id === lead.bookedUnitId)
+        : undefined;
+
+      return [
+        lead.id,
+        lead.buyerName,
+        canViewPhone(lead) ? lead.phone : maskPhone(lead.phone, false),
+        lead.email,
+        proj?.name || '',
+        lead.interestedBhk,
+        lead.budgetInr,
+        lead.stage,
+        brk?.name || '',
+        brk?.firmName || '',
+        bookedUnit ? `Unit ${bookedUnit.unitNumber}` : '-',
+        lead.notes,
+        lead.createdAt,
+      ];
+    });
+
+    const csvContent = [header, ...dataRows]
+      .map((row) => row.map(escapeCsvCell).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const filename =
+      role === 'Broker'
+        ? `solex-my-leads-${activeBrokerId}.csv`
+        : 'solex-lead-pipeline.csv';
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleCreateLead = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,98 +186,254 @@ export const LeadPipelineView: React.FC = () => {
     setShowNewLeadModal(false);
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
+  const sortedLeads = [...scopedLeads].sort((a, b) => {
+    const dir = sortAsc ? 1 : -1;
+    if (sortField === 'buyerName') {
+      return a.buyerName.localeCompare(b.buyerName) * dir;
+    }
+    if (sortField === 'project') {
+      const pa = projects.find((p) => p.id === a.projectId)?.name || '';
+      const pb = projects.find((p) => p.id === b.projectId)?.name || '';
+      return pa.localeCompare(pb) * dir;
+    }
+    if (sortField === 'budgetInr') {
+      return (a.budgetInr - b.budgetInr) * dir;
+    }
+    if (sortField === 'stage') {
+      return (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) * dir;
+    }
+    return a.createdAt.localeCompare(b.createdAt) * dir;
+  });
+
+  const selectedLead = selectedLeadId
+    ? leads.find((l) => l.id === selectedLeadId)
+    : null;
+
+  const renderLeadCard = (lead: Lead) => {
+    const proj = projects.find((p) => p.id === lead.projectId);
+    const broker = brokers.find((b) => b.id === lead.assignedBrokerId);
+    const isMenuOpen = openMenuLeadId === lead.id;
+
+    return (
+      <div
+        key={lead.id}
+        draggable={lead.stage !== 'Booked'}
+        onDragStart={(e) => {
+          setDraggedLeadId(lead.id);
+          e.dataTransfer.setData('text/plain', lead.id);
+        }}
+        onDragEnd={() => {
+          setDraggedLeadId(null);
+          setDragOverStage(null);
+        }}
+        onClick={() => setSelectedLeadId(lead.id)}
+        className={`group relative p-3.5 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-colors cursor-pointer ${
+          draggedLeadId === lead.id ? 'opacity-50' : ''
+        }`}
+      >
+        {/* Top Row: Buyer Name 14/500 + Hover ⋯ Menu */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="t-14-medium text-[var(--text-primary)] truncate">
+            {lead.buyerName}
+          </div>
+
+          <div
+            className="relative shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenMenuLeadId(isMenuOpen ? null : lead.id)}
+              aria-label={`Actions for ${lead.buyerName}`}
+              className={`w-6 h-6 rounded-[6px] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--subtle)] transition-opacity cursor-pointer ${
+                isMenuOpen
+                  ? 'opacity-100 bg-[var(--subtle)]'
+                  : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+              }`}
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+
+            {isMenuOpen && (
+              <div className="absolute right-0 top-7 z-30 w-44 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-1 t-12">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenMenuLeadId(null);
+                    setSelectedLeadId(lead.id);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[var(--subtle)] text-[var(--text-primary)] cursor-pointer"
+                >
+                  Inspect lead
+                </button>
+                {lead.stage !== 'Booked' &&
+                  (['New', 'Site Visit', 'Negotiation'] as LeadStage[])
+                    .filter((s) => s !== lead.stage)
+                    .map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          updateLeadStage(lead.id, s);
+                          setOpenMenuLeadId(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-[var(--subtle)] text-[var(--text-secondary)] cursor-pointer"
+                      >
+                        Move to {s}
+                      </button>
+                    ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Project Chip + Configuration */}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {proj && <ProjectChip projectId={proj.id} name={proj.name} />}
+          <span className="t-12 text-[var(--text-secondary)]">
+            {lead.interestedBhk}
+          </span>
+        </div>
+
+        {/* Budget in mono + Masked Phone */}
+        <div className="flex items-center justify-between gap-2 mt-2.5">
+          <span
+            className="t-13-medium t-mono text-[var(--text-primary)]"
+            title={formatInrFull(lead.budgetInr)}
+          >
+            {formatInr(lead.budgetInr)}
+          </span>
+          <span className="t-12 t-mono text-[var(--text-tertiary)]">
+            {maskPhone(lead.phone, canViewPhone(lead))}
+          </span>
+        </div>
+
+        {/* CP name tertiary + "2d ago" */}
+        <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[var(--border)] t-12 text-[var(--text-tertiary)]">
+          <span className="truncate">{broker?.firmName || broker?.name}</span>
+          <span className="t-mono shrink-0">
+            {formatRelativeAge(lead.createdAt)}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* Header & Primary Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+    <div
+      className="space-y-5"
+      onClick={() => {
+        if (openMenuLeadId) setOpenMenuLeadId(null);
+      }}
+    >
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            {role === 'Broker'
-              ? 'My Channel Partner Leads'
-              : 'Lead-to-Booking Pipeline'}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Track buyer progression from inquiry and site visit to unit negotiation and confirmed allotment.
+          <h1 className="t-22-title text-[var(--text-primary)]">Leads</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-0.5">
+            Buyer pipeline from initial inquiry and site visit to unit allotment.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* Kanban / List View Toggle */}
-          <div className="flex items-center gap-1 p-1 bg-slate-200/75 rounded-lg">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportLeadsCsv}
+            className="btn-secondary"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export to CSV</span>
+          </button>
+
+          <div
+            role="tablist"
+            aria-label="Pipeline display mode"
+            className="inline-flex items-center p-0.5 rounded-[6px] bg-[var(--subtle)] border border-[var(--border)]"
+          >
             <button
               type="button"
+              role="tab"
+              aria-selected={displayMode === 'kanban'}
               onClick={() => setDisplayMode('kanban')}
-              className={`flex items-center gap-1 px-2.5 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+              className={`h-[26px] px-2.5 rounded-[4px] t-12 transition-colors cursor-pointer ${
                 displayMode === 'kanban'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <Kanban className="w-3.5 h-3.5" />
-              <span>Kanban</span>
+              Kanban
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={displayMode === 'list'}
               onClick={() => setDisplayMode('list')}
-              className={`flex items-center gap-1 px-2.5 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+              className={`h-[26px] px-2.5 rounded-[4px] t-12 transition-colors cursor-pointer ${
                 displayMode === 'list'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <List className="w-3.5 h-3.5" />
-              <span>Table</span>
+              Table
             </button>
           </div>
 
-          {/* Register New Lead Button */}
           <button
             type="button"
             onClick={() => setShowNewLeadModal(true)}
-            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            className="btn-primary"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Register Lead</span>
+            <span>New lead</span>
           </button>
         </div>
       </div>
 
-      {/* Top Real-Time Lead Search & Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="relative flex-1">
+      {/* Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="relative flex-1 max-w-md">
           <label htmlFor="lead-pipeline-search" className="sr-only">
             Filter leads by buyer name or contact number
           </label>
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-3.5 h-3.5 text-[var(--icon-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             id="lead-pipeline-search"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter leads by buyer name or contact number (e.g., Vikramaditya or +91 98201)..."
+            placeholder="Filter by buyer name or phone..."
             aria-label="Filter leads by buyer name or contact number"
-            className="w-full pl-10 pr-9 py-2 rounded-lg border border-slate-300 bg-slate-50/60 focus:bg-white text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition-colors"
+            className="input-control pl-8 pr-8"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
               aria-label="Clear search query"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-3">
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
             aria-label="Filter leads by project"
-            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+            className="input-control w-auto"
           >
-            <option value="All">All Mandate Projects</option>
+            <option value="All">All projects</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -189,272 +441,514 @@ export const LeadPipelineView: React.FC = () => {
             ))}
           </select>
 
-          <div className="text-xs text-slate-500 font-mono tabular-nums whitespace-nowrap">
-            Showing <span className="font-bold text-slate-900">{scopedLeads.length}</span> of{' '}
-            <span className="font-semibold text-slate-700">{roleAndProjectLeads.length}</span> leads
-          </div>
+          <span className="t-12 t-mono text-[var(--text-tertiary)] whitespace-nowrap">
+            {scopedLeads.length} of {roleAndProjectLeads.length}
+          </span>
         </div>
       </div>
 
-      {/* KANBAN BOARD VIEW */}
+      {/* KANBAN VIEW */}
       {displayMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-          {STAGES.map((stage) => {
-            const stageLeads = scopedLeads.filter((l) => l.stage === stage);
-            const totalStageBudget = stageLeads.reduce(
-              (acc, l) => acc + l.budgetInr,
-              0
-            );
+        <>
+          {/* Mobile (<640px): Stage selector + list */}
+          <div className="sm:hidden space-y-3">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-[var(--border)]">
+              {STAGES.map((stage) => {
+                const count = scopedLeads.filter(
+                  (l) => l.stage === stage
+                ).length;
+                const active = mobileStage === stage;
+                return (
+                  <button
+                    key={stage}
+                    type="button"
+                    onClick={() => setMobileStage(stage)}
+                    className={`px-2.5 py-1.5 rounded-[6px] t-12 whitespace-nowrap cursor-pointer ${
+                      active
+                        ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)] font-medium'
+                        : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {stage} <span className="t-mono">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-y-2.5">
+              {scopedLeads
+                .filter((l) => l.stage === mobileStage)
+                .map((lead) => renderLeadCard(lead))}
+            </div>
+          </div>
 
-            return (
-              <div
-                key={stage}
-                className="bg-slate-100/90 rounded-xl border border-slate-200 p-3.5 flex flex-col gap-3"
-              >
-                {/* Column Header */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                      {stage}
-                    </h2>
-                    <span className="text-xs font-mono font-semibold text-slate-500">
-                      ({stageLeads.length})
+          {/* Desktop/Tablet (>=640px): 4 columns on Paper 50, headers in stage colour with mono count and stage value */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            {STAGES.map((stage) => {
+              const stageLeads = scopedLeads.filter((l) => l.stage === stage);
+              const totalStageBudget = stageLeads.reduce(
+                (acc, l) => acc + l.budgetInr,
+                0
+              );
+              const isDropTarget = dragOverStage === stage;
+              const stageColor = STAGE_COLORS[stage];
+
+              return (
+                <div
+                  key={stage}
+                  onDragOver={(e) => {
+                    if (stage === 'Booked') return;
+                    e.preventDefault();
+                    setDragOverStage(stage);
+                  }}
+                  onDragLeave={() => setDragOverStage(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverStage(null);
+                    const droppedId =
+                      e.dataTransfer.getData('text/plain') || draggedLeadId;
+                    if (droppedId && stage !== 'Booked') {
+                      updateLeadStage(droppedId, stage);
+                    }
+                    setDraggedLeadId(null);
+                  }}
+                  className={`space-y-2.5 rounded-[10px] transition-colors ${
+                    isDropTarget ? 'bg-[var(--subtle)] p-2 -m-2' : ''
+                  }`}
+                >
+                  {/* Column Header in Stage Colour */}
+                  <div
+                    className="flex items-center justify-between pb-2 border-b-2"
+                    style={{ borderColor: stageColor }}
+                  >
+                    <div className="flex items-center gap-2 t-12">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: stageColor }}
+                      />
+                      <span
+                        className="font-semibold"
+                        style={{ color: stageColor }}
+                      >
+                        {stage}
+                      </span>
+                      <span className="t-mono text-[var(--text-tertiary)]">
+                        {stageLeads.length}
+                      </span>
+                    </div>
+                    <span
+                      className="t-12 t-mono text-[var(--text-secondary)]"
+                      title={formatInrFull(totalStageBudget)}
+                    >
+                      {formatInr(totalStageBudget)}
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-500">
-                    {formatInrCompact(totalStageBudget)}
-                  </span>
+
+                  {/* Column Cards */}
+                  <div className="space-y-2.5 min-h-[120px]">
+                    {stageLeads.length === 0 ? (
+                      <div className="py-4 t-12 text-[var(--text-tertiary)]">
+                        No leads in {stage.toLowerCase()}.
+                      </div>
+                    ) : (
+                      stageLeads.map((lead) => renderLeadCard(lead))
+                    )}
+                  </div>
                 </div>
-
-                {/* Cards */}
-                <div className="space-y-3">
-                  {stageLeads.length === 0 ? (
-                    <div className="p-6 rounded-lg border border-dashed border-slate-300 text-center text-xs text-slate-400">
-                      No leads in {stage}
-                    </div>
-                  ) : (
-                    stageLeads.map((lead) => {
-                      const proj = projects.find((p) => p.id === lead.projectId);
-                      const broker = brokers.find(
-                        (b) => b.id === lead.assignedBrokerId
-                      );
-                      const bookedUnit = lead.bookedUnitId
-                        ? units.find((u) => u.id === lead.bookedUnitId)
-                        : undefined;
-
-                      return (
-                        <div
-                          key={lead.id}
-                          className="p-4 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-all space-y-3"
-                        >
-                          <div>
-                            <div className="text-xs text-slate-500 flex items-center gap-1.5">
-                              <span className="font-medium text-indigo-600">
-                                {proj?.name}
-                              </span>
-                              <span>·</span>
-                              <span>{lead.interestedBhk}</span>
-                            </div>
-                            <h3 className="text-sm font-bold text-slate-900 mt-1">
-                              {lead.buyerName}
-                            </h3>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-1">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              <span>{lead.phone}</span>
-                            </div>
-                          </div>
-
-                          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                            {lead.notes}
-                          </p>
-
-                          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                            <div>
-                              <span className="text-slate-400">Budget: </span>
-                              <span className="font-mono font-bold text-slate-900">
-                                {formatInrCompact(lead.budgetInr)}
-                              </span>
-                            </div>
-                            <span className="text-slate-500 truncate max-w-[130px]">
-                              CP: {broker?.name}
-                            </span>
-                          </div>
-
-                          {/* Stage Actions & Convert to Booking */}
-                          {lead.stage !== 'Booked' ? (
-                            <div className="pt-2 flex flex-col gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openBookingModal({
-                                    leadId: lead.id,
-                                    projectId: lead.projectId,
-                                    unitId: lead.preferredUnitId,
-                                  })
-                                }
-                                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                              >
-                                <span>Convert to Booking</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Quick Stage Progression */}
-                              <div className="flex items-center justify-between gap-1 text-[11px]">
-                                <span className="text-slate-400">Move stage:</span>
-                                <div className="flex items-center gap-1">
-                                  {(['New', 'Site Visit', 'Negotiation'] as LeadStage[])
-                                    .filter((s) => s !== lead.stage)
-                                    .map((s) => (
-                                      <button
-                                        key={s}
-                                        type="button"
-                                        onClick={() => updateLeadStage(lead.id, s)}
-                                        className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium cursor-pointer"
-                                      >
-                                        {s}
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="pt-2 flex items-center justify-between text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
-                              <span className="flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Booking Confirmed</span>
-                              </span>
-                              {bookedUnit && (
-                                <span className="font-mono">
-                                  Unit {bookedUnit.unitNumber}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       ) : (
-        /* TABLE LIST VIEW */
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
-                  <th className="py-3 px-4">Buyer Name & Contact</th>
-                  <th className="py-3 px-4">Mandate Project</th>
-                  <th className="py-3 px-4">Configuration</th>
-                  <th className="py-3 px-4 text-right">Target Budget</th>
-                  <th className="py-3 px-4">Channel Partner</th>
-                  <th className="py-3 px-4">Stage</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 text-sm">
-                {scopedLeads.map((lead) => {
+        /* TABLE VIEW: Paper 25 header, 12px uppercase Paper 500 labels, 44px rows, hover Paper 25, right-aligned mono numbers, "⋯" row actions */
+        <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
+          {sortedLeads.length === 0 ? (
+            <EmptyStateBlock
+              icon={Users}
+              title="No buyer leads match your filter"
+              guidance="Clear the search query or register a new buyer inquiry."
+              actionLabel="Reset filter"
+              onAction={() => {
+                setSearchQuery('');
+                setProjectFilter('All');
+              }}
+            />
+          ) : (
+            <>
+              {/* Mobile stacked rows (<640px) */}
+              <div className="sm:hidden divide-y divide-[var(--border)]">
+                {sortedLeads.map((lead) => {
                   const proj = projects.find((p) => p.id === lead.projectId);
-                  const brk = brokers.find((b) => b.id === lead.assignedBrokerId);
+                  const brk = brokers.find(
+                    (b) => b.id === lead.assignedBrokerId
+                  );
                   return (
-                    <tr
+                    <div
                       key={lead.id}
-                      className="hover:bg-slate-50/80 transition-colors"
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      className="p-3.5 space-y-1 cursor-pointer hover:bg-[var(--subtle)]"
                     >
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">
+                      <div className="flex items-center justify-between">
+                        <span className="t-14-medium text-[var(--text-primary)]">
                           {lead.buyerName}
-                        </div>
-                        <div className="text-xs text-slate-500 font-mono">
-                          {lead.phone}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs font-medium text-slate-800">
-                        {proj?.name}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-600">
-                        {lead.interestedBhk}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-900">
-                        {formatInrCompact(lead.budgetInr)}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-600">
-                        {brk?.name} · {brk?.firmName}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs font-semibold text-slate-800">
-                        {lead.stage}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        {lead.stage !== 'Booked' ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openBookingModal({
-                                leadId: lead.id,
-                                projectId: lead.projectId,
-                                unitId: lead.preferredUnitId,
-                              })
-                            }
-                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
-                          >
-                            Convert to Booking
-                          </button>
-                        ) : (
-                          <span className="text-xs font-semibold text-emerald-700 font-mono">
-                            Allotted
-                          </span>
-                        )}
-                      </td>
-                    </tr>
+                        </span>
+                        <span className="t-13 t-mono text-[var(--text-primary)]">
+                          {formatInr(lead.budgetInr)}
+                        </span>
+                      </div>
+                      <div className="t-12 text-[var(--text-secondary)]">
+                        {proj?.name} · {lead.interestedBhk} · {lead.stage}
+                      </div>
+                      <div className="flex items-center justify-between t-12 text-[var(--text-tertiary)]">
+                        <span className="t-mono">
+                          {maskPhone(lead.phone, canViewPhone(lead))}
+                        </span>
+                        <span>{brk?.firmName}</span>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* Desktop/Tablet Table (>=640px) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[var(--subtle)] border-b border-[var(--border)]">
+                    <tr className="h-9 text-[12px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                      <th className="px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('buyerName')}
+                          className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] cursor-pointer uppercase"
+                        >
+                          <span>Buyer</span>
+                          <ArrowUpDown className="w-3 h-3" />
+                        </button>
+                      </th>
+                      <th className="px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('project')}
+                          className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] cursor-pointer uppercase"
+                        >
+                          <span>Project · Config</span>
+                          <ArrowUpDown className="w-3 h-3" />
+                        </button>
+                      </th>
+                      <th className="px-4">Phone</th>
+                      <th className="px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('budgetInr')}
+                          className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] cursor-pointer uppercase ml-auto"
+                        >
+                          <span>Budget</span>
+                          <ArrowUpDown className="w-3 h-3" />
+                        </button>
+                      </th>
+                      <th className="px-4">Channel partner</th>
+                      <th className="px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('stage')}
+                          className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] cursor-pointer uppercase"
+                        >
+                          <span>Stage</span>
+                          <ArrowUpDown className="w-3 h-3" />
+                        </button>
+                      </th>
+                      <th className="px-4 text-right">Last activity</th>
+                      <th className="px-4 text-right w-14"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)] t-13">
+                    {sortedLeads.map((lead) => {
+                      const proj = projects.find(
+                        (p) => p.id === lead.projectId
+                      );
+                      const brk = brokers.find(
+                        (b) => b.id === lead.assignedBrokerId
+                      );
+                      return (
+                        <tr
+                          key={lead.id}
+                          onClick={() => setSelectedLeadId(lead.id)}
+                          className="group h-11 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 font-medium text-[var(--text-primary)]">
+                            {lead.buyerName}
+                          </td>
+                          <td className="px-4">
+                            <div className="flex items-center gap-2">
+                              {proj && (
+                                <ProjectChip
+                                  projectId={proj.id}
+                                  name={proj.name}
+                                />
+                              )}
+                              <span className="text-[var(--text-secondary)]">
+                                {lead.interestedBhk}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 t-mono text-[var(--text-secondary)]">
+                            {maskPhone(lead.phone, canViewPhone(lead))}
+                          </td>
+                          <td
+                            className="px-4 text-right t-mono text-[var(--text-primary)]"
+                            title={formatInrFull(lead.budgetInr)}
+                          >
+                            {formatInr(lead.budgetInr)}
+                          </td>
+                          <td className="px-4 text-[var(--text-tertiary)]">
+                            {brk?.firmName}
+                          </td>
+                          <td className="px-4">
+                            <span
+                              className="inline-flex items-center gap-1.5 t-12 font-medium"
+                              style={{ color: STAGE_COLORS[lead.stage] }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{
+                                  backgroundColor: STAGE_COLORS[lead.stage],
+                                }}
+                              />
+                              <span>{lead.stage}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 text-right t-mono text-[var(--text-tertiary)]">
+                            {formatRelativeAge(lead.createdAt)}
+                          </td>
+                          <td
+                            className="px-4 text-right"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLeadId(lead.id)}
+                              aria-label={`Inspect ${lead.buyerName}`}
+                              className="w-7 h-7 rounded-[6px] inline-flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg)] cursor-pointer"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-4 py-2.5 bg-[var(--subtle)] border-t border-[var(--border)] flex items-center justify-between t-12 text-[var(--text-tertiary)]">
+                <span className="t-mono">
+                  1–{sortedLeads.length} of {roleAndProjectLeads.length}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* Register New Lead Modal */}
+      {/* LEAD DETAIL DRAWER (480px Right; "Convert to booking" is the accent button here) */}
+      {selectedLead && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/30"
+            onClick={() => setSelectedLeadId(null)}
+          />
+          <aside
+            role="dialog"
+            aria-label={`Lead ${selectedLead.buyerName}`}
+            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+          >
+            <div className="divide-y divide-[var(--border)]">
+              <div
+                className="p-5 flex items-start justify-between gap-4 border-b"
+                style={{
+                  backgroundColor: 'var(--ivory-band)',
+                  borderColor: 'var(--ivory-band-border)',
+                }}
+              >
+                <div>
+                  <div className="t-12 text-[var(--text-secondary)]">
+                    {
+                      projects.find((p) => p.id === selectedLead.projectId)
+                        ?.name
+                    }{' '}
+                    · {selectedLead.interestedBhk}
+                  </div>
+                  <h2 className="t-22-title text-[var(--text-primary)] mt-1">
+                    {selectedLead.buyerName}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadId(null)}
+                  className="btn-ghost btn-sm px-2"
+                  aria-label="Close lead drawer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 grid grid-cols-2 gap-4 t-13">
+                <div>
+                  <div className="t-12 text-[var(--text-tertiary)]">Phone</div>
+                  <div className="t-mono text-[var(--text-primary)] mt-0.5">
+                    {maskPhone(selectedLead.phone, canViewPhone(selectedLead))}
+                  </div>
+                </div>
+                <div>
+                  <div className="t-12 text-[var(--text-tertiary)]">Budget</div>
+                  <div
+                    className="t-mono text-[var(--money-total)] font-medium mt-0.5"
+                    title={formatInrFull(selectedLead.budgetInr)}
+                  >
+                    {formatInr(selectedLead.budgetInr)}
+                  </div>
+                </div>
+                <div>
+                  <div className="t-12 text-[var(--text-tertiary)]">
+                    Channel partner
+                  </div>
+                  <div className="text-[var(--text-primary)] mt-0.5">
+                    {
+                      brokers.find(
+                        (b) => b.id === selectedLead.assignedBrokerId
+                      )?.name
+                    }{' '}
+                    ·{' '}
+                    {
+                      brokers.find(
+                        (b) => b.id === selectedLead.assignedBrokerId
+                      )?.firmName
+                    }
+                  </div>
+                </div>
+                <div>
+                  <div className="t-12 text-[var(--text-tertiary)]">
+                    Registered
+                  </div>
+                  <div className="t-mono text-[var(--text-primary)] mt-0.5">
+                    {formatShortDate(selectedLead.createdAt)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-2">
+                <div className="t-12 text-[var(--text-tertiary)]">Stage</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {STAGES.map((stg) => {
+                    const active = selectedLead.stage === stg;
+                    const disabled = stg === 'Booked' && !active;
+                    return (
+                      <button
+                        key={stg}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          if (stg !== 'Booked') {
+                            updateLeadStage(selectedLead.id, stg);
+                          }
+                        }}
+                        className={`h-7 px-2.5 rounded-[6px] t-12 border transition-colors ${
+                          active
+                            ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--subtle)] font-medium'
+                            : disabled
+                            ? 'border-[var(--border)] text-[var(--text-tertiary)] opacity-50 cursor-not-allowed'
+                            : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer'
+                        }`}
+                      >
+                        {stg}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-5 space-y-1.5">
+                <div className="t-12 text-[var(--text-tertiary)]">Notes</div>
+                <p className="t-13 text-[var(--text-secondary)]">
+                  {selectedLead.notes || 'No requirement notes recorded.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedLeadId(null)}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+              {selectedLead.stage !== 'Booked' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetLead = selectedLead;
+                    setSelectedLeadId(null);
+                    openBookingModal({
+                      leadId: targetLead.id,
+                      projectId: targetLead.projectId,
+                      unitId: targetLead.preferredUnitId,
+                    });
+                  }}
+                  className="btn-accent"
+                >
+                  Convert to booking
+                </button>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Register New Lead Dialog (480px) */}
       {showNewLeadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="fixed inset-0 bg-slate-900/50"
+            className="fixed inset-0 bg-black/40"
             onClick={() => setShowNewLeadModal(false)}
           />
-          <div className="relative z-10 w-full max-w-lg bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <h2 className="text-base font-bold">Register New Buyer Lead</h2>
+          <div
+            role="dialog"
+            aria-label="New buyer lead"
+            className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse overflow-hidden"
+          >
+            <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
+              <h2 className="t-16 text-[var(--text-primary)]">
+                New buyer lead
+              </h2>
               <button
                 type="button"
                 onClick={() => setShowNewLeadModal(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="btn-ghost btn-sm px-2"
+                aria-label="Close dialog"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateLead} className="p-6 space-y-4">
+            <form onSubmit={handleCreateLead} className="p-5 space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Buyer Full Name *
+                <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                  Buyer name
                 </label>
                 <input
                   type="text"
                   required
                   value={buyerName}
                   onChange={(e) => setBuyerName(e.target.value)}
-                  placeholder="e.g., Aditya & Kavita Rao"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
+                  placeholder="Aditya & Kavita Rao"
+                  className="input-control"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mobile Number *
+                  <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                    Mobile number
                   </label>
                   <input
                     type="text"
@@ -462,32 +956,32 @@ export const LeadPipelineView: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98201 00000"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
+                    className="input-control t-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Target Budget (₹ Cr)
+                  <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                    Budget (₹ Cr)
                   </label>
                   <input
                     type="number"
                     step="0.1"
                     value={budgetCr}
                     onChange={(e) => setBudgetCr(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 font-mono"
+                    className="input-control t-mono"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Target Project
+                  <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                    Project
                   </label>
                   <select
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 bg-white"
+                    className="input-control"
                   >
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -497,7 +991,7 @@ export const LeadPipelineView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block t-12 text-[var(--text-secondary)] mb-1">
                     Configuration
                   </label>
                   <select
@@ -510,7 +1004,7 @@ export const LeadPipelineView: React.FC = () => {
                           | '4 BHK Sky Villa'
                       )
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 bg-white"
+                    className="input-control"
                   >
                     <option value="2 BHK Luxury">2 BHK Luxury</option>
                     <option value="3 BHK Grand">3 BHK Grand</option>
@@ -521,13 +1015,13 @@ export const LeadPipelineView: React.FC = () => {
 
               {role === 'Admin' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Attributing Channel Partner (Broker)
+                  <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                    Channel partner
                   </label>
                   <select
                     value={assignedBrokerId}
                     onChange={(e) => setAssignedBrokerId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 bg-white"
+                    className="input-control"
                   >
                     {brokers.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -539,15 +1033,15 @@ export const LeadPipelineView: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Site Visit / Requirement Notes
+                <label className="block t-12 text-[var(--text-secondary)] mb-1">
+                  Notes
                 </label>
-                <textarea
-                  rows={2}
+                <input
+                  type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Preferred floor band, payment scheme..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
+                  placeholder="Floor preference, payment plan..."
+                  className="input-control"
                 />
               </div>
 
@@ -555,15 +1049,12 @@ export const LeadPipelineView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewLeadModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 cursor-pointer"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer"
-                >
-                  Register Lead
+                <button type="submit" className="btn-primary">
+                  Save lead
                 </button>
               </div>
             </form>

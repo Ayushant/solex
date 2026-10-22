@@ -1,22 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import {
   useSolexStore,
   UnitStatus,
   getUnitAllInclusivePrice,
-  formatInrCompact,
 } from '../store/useSolexStore';
-import { ThreeTowerView } from './ThreeTowerView';
 import {
-  Building2,
-  Grid,
-  Box,
-  CheckCircle2,
-  Clock,
-  Lock,
-  SlidersHorizontal,
-  PlusCircle,
-  RotateCcw,
-} from 'lucide-react';
+  formatInr,
+  formatArea,
+  formatPct,
+  StatusLegend,
+  EmptyStateBlock,
+  getProjectColor,
+} from '../lib/formatters';
+import { MoreHorizontal, Building2 } from 'lucide-react';
+
+const LazyThreeTowerView = React.lazy(() => import('./ThreeTowerView'));
 
 export const ProjectInventoryView: React.FC = () => {
   const {
@@ -32,12 +30,17 @@ export const ProjectInventoryView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [statusFilter, setStatusFilter] = useState<'All' | UnitStatus>('All');
   const [bhkFilter, setBhkFilter] = useState<string>('All');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const project =
     projects.find((p) => p.id === selectedProjectId) || projects[0];
   const projectUnits = units.filter((u) => u.projectId === project.id);
 
-  const availableCount = projectUnits.filter((u) => u.status === 'Available').length;
+  const availableCount = projectUnits.filter(
+    (u) => u.status === 'Available'
+  ).length;
   const holdCount = projectUnits.filter((u) => u.status === 'Hold').length;
   const soldCount = projectUnits.filter((u) => u.status === 'Sold').length;
 
@@ -49,353 +52,444 @@ export const ProjectInventoryView: React.FC = () => {
 
   const filteredUnitIds = new Set(filteredUnits.map((u) => u.id));
 
-  // Group floors from top floor down to Floor 1 (standard architectural stacking chart)
+  // Highest floor at top
   const floorsDesc: number[] = [];
   for (let f = project.floors; f >= 1; f--) {
     floorsDesc.push(f);
   }
 
+  // Keyboard arrow navigation across the stacking grid
+  const handleCellKeyDown = (
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    floor: number,
+    stackIndex: number,
+    unitId: string
+  ) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setSelectedUnitId(unitId);
+      return;
+    }
+
+    let nextFloor = floor;
+    let nextStack = stackIndex;
+
+    if (e.key === 'ArrowRight') {
+      nextStack = Math.min(project.unitsPerFloor, stackIndex + 1);
+    } else if (e.key === 'ArrowLeft') {
+      nextStack = Math.max(1, stackIndex - 1);
+    } else if (e.key === 'ArrowUp') {
+      nextFloor = Math.min(project.floors, floor + 1);
+    } else if (e.key === 'ArrowDown') {
+      nextFloor = Math.max(1, floor - 1);
+    } else {
+      return;
+    }
+
+    e.preventDefault();
+    const key = `${nextFloor}-${nextStack}`;
+    cellRefs.current[key]?.focus();
+  };
+
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Top Bar: Project Selector & View Mode Toggle */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Project & Inventory Matrix
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-relaxed">
-            Interactive floor-by-floor stacking matrix and 3D architectural massing. Tap any apartment unit to inspect pricing or initiate a booking.
+    <div className="space-y-4">
+      {/* Page Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="t-22-title text-[var(--text-primary)]">Inventory</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-0.5">
+            Select a unit in the stacking plan or 3D view to inspect the cost sheet, place a 24h hold, or book.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 shrink-0">
-          {/* Project Switcher Tabs (equal-width grid on mobile, inline tabs on sm+) */}
-          <div className="grid grid-cols-3 sm:flex items-center gap-1 p-1 bg-slate-200/75 rounded-lg">
-            {projects.map((p) => (
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => openBookingModal({ projectId: project.id })}
+            className="btn-primary"
+          >
+            Book unit
+          </button>
+        </div>
+
+        {/* Mobile (< 640px) Actions Menu */}
+        <div className="relative sm:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            className="btn-secondary px-2"
+            aria-label="Inventory actions"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {mobileMenuOpen && (
+            <div className="absolute right-0 mt-1 w-40 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openBookingModal({ projectId: project.id });
+                }}
+                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+              >
+                Book unit
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Project Tabs + Right-Aligned 2D/3D Segmented Control */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)]">
+        <div className="flex items-center gap-5 overflow-x-auto" role="tablist">
+          {projects.map((p, idx) => {
+            const active = p.id === project.id;
+            const projColor = getProjectColor(p.id, idx);
+            return (
               <button
                 key={p.id}
+                role="tab"
+                aria-selected={active}
                 type="button"
                 onClick={() => setSelectedProjectId(p.id)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer truncate ${
-                  p.id === project.id
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                className={`pb-2.5 -mb-px t-13-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2 ${
+                  active
+                    ? 'border-[var(--accent)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                {p.name}
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: projColor }}
+                />
+                <span>{p.name}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* 2D Matrix vs 3D Tower View Toggle */}
-          <div className="grid grid-cols-2 sm:flex items-center gap-1 p-1 bg-slate-900 text-white rounded-lg">
+        {/* Right-Aligned 2D / 3D Segmented Control */}
+        <div className="pb-2 flex items-center gap-1">
+          <div className="inline-flex p-0.5 rounded-[6px] bg-[var(--subtle)] border border-[var(--border)]">
             <button
               type="button"
               onClick={() => setViewMode('2d')}
-              className={`justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 h-7 rounded-[4px] t-12 transition-colors cursor-pointer ${
                 viewMode === '2d'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <Grid className="w-3.5 h-3.5 shrink-0" />
-              <span>2D Stacking Grid</span>
+              2D plan
             </button>
             <button
               type="button"
               onClick={() => setViewMode('3d')}
-              className={`justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-2.5 h-7 rounded-[4px] t-12 transition-colors cursor-pointer ${
                 viewMode === '3d'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <Box className="w-3.5 h-3.5 shrink-0" />
-              <span>3D Tower</span>
+              3D view
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mandate Summary Banner */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 pb-4 border-b border-slate-100">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-              <span className="font-semibold text-indigo-600">
-                {project.mandateType}
-              </span>
-              <span>·</span>
-              <span>Developer: {project.developerName}</span>
-              <span className="hidden sm:inline">·</span>
-              <span className="font-mono">RERA: {project.reraNumber}</span>
-              <span>·</span>
-              <span>Possession: {project.possessionDate}</span>
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <Building2 className="w-5 h-5 text-indigo-600 shrink-0" />
-              <span>{project.name}</span>
-              <span className="text-xs sm:text-sm font-normal text-slate-500">
-                — {project.location}
-              </span>
-            </h2>
-            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-              {project.mandateTermsSummary}
-            </p>
-          </div>
+      {/* Compact Key-Facts Strip (Developer, RERA ID mono, Possession, Mandate fee, Channel share) */}
+      <div className="px-4 py-2.5 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] flex flex-wrap items-center gap-x-6 gap-y-2 t-12">
+        <div>
+          <span className="text-[var(--text-tertiary)]">Developer: </span>
+          <span className="text-[var(--text-primary)] font-medium">
+            {project.developerName}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--text-tertiary)]">RERA ID: </span>
+          <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            {project.reraNumber}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--text-tertiary)]">Possession: </span>
+          <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            {project.possessionDate}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--text-tertiary)]">Mandate fee: </span>
+          <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            {formatPct(project.mandateCommissionPct)}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--text-tertiary)]">Channel share: </span>
+          <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            {formatPct(project.brokerSharePct)}
+          </span>
+        </div>
+      </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+      {/* Legend with Live Counts Above + Filter Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <StatusLegend
+          availableCount={availableCount}
+          holdCount={holdCount}
+          soldCount={soldCount}
+          blockedCount={0}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="inventory-status-filter" className="sr-only">
+            Filter units by status
+          </label>
+          <select
+            id="inventory-status-filter"
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(e.target.value as 'All' | UnitStatus)
+            }
+            aria-label="Filter units by status"
+            className="input-control t-12 w-auto"
+          >
+            <option value="All">All statuses ({projectUnits.length})</option>
+            <option value="Available">Available ({availableCount})</option>
+            <option value="Hold">On hold ({holdCount})</option>
+            <option value="Sold">Sold ({soldCount})</option>
+          </select>
+
+          <label htmlFor="inventory-bhk-filter" className="sr-only">
+            Filter units by configuration
+          </label>
+          <select
+            id="inventory-bhk-filter"
+            value={bhkFilter}
+            onChange={(e) => setBhkFilter(e.target.value)}
+            aria-label="Filter units by configuration"
+            className="input-control t-12 w-auto"
+          >
+            <option value="All">All configurations</option>
+            <option value="2 BHK Luxury">2 BHK Luxury</option>
+            <option value="3 BHK Grand">3 BHK Grand</option>
+            <option value="4 BHK Sky Villa">4 BHK Sky Villa</option>
+          </select>
+
+          {(statusFilter !== 'All' || bhkFilter !== 'All') && (
             <button
               type="button"
-              onClick={() => openBookingModal({ projectId: project.id })}
-              className="w-full lg:w-auto justify-center px-4 py-2.5 sm:py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              onClick={() => {
+                setStatusFilter('All');
+                setBhkFilter('All');
+              }}
+              className="btn-ghost btn-sm"
             >
-              <PlusCircle className="w-4 h-4 shrink-0" />
-              <span>Book Unit in {project.name}</span>
+              Reset
             </button>
-          </div>
-        </div>
-
-        {/* Inventory Absorption Counters & Filter Dropdowns */}
-        <div className="pt-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4">
-          {/* 2x2 grid on narrow mobile, horizontal row on sm+ */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-y-2 gap-x-4 sm:gap-6 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Total Stock:</span>
-              <span className="font-bold font-mono tabular-nums text-slate-900">
-                {project.totalUnits}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600 inline-block shrink-0" />
-              <span className="text-slate-600">Available:</span>
-              <span className="font-bold font-mono tabular-nums text-emerald-700">
-                {availableCount}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-amber-500 inline-block shrink-0" />
-              <span className="text-slate-600">On Hold:</span>
-              <span className="font-bold font-mono tabular-nums text-amber-700">
-                {holdCount}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-slate-500 inline-block shrink-0" />
-              <span className="text-slate-600">Sold:</span>
-              <span className="font-bold font-mono tabular-nums text-slate-700">
-                {soldCount}
-              </span>
-            </div>
-          </div>
-
-          {/* Interactive Filter Dropdowns (Unit Status Dropdown + Configuration Dropdown) */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <label
-                htmlFor="inventory-status-filter"
-                className="font-medium text-slate-600 whitespace-nowrap"
-              >
-                Unit View:
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
-              <select
-                id="inventory-status-filter"
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as 'All' | UnitStatus)
-                }
-                aria-label="Filter units by status"
-                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
-              >
-                <option value="All">All Units ({projectUnits.length})</option>
-                <option value="Available">
-                  Available ({availableCount})
-                </option>
-                <option value="Sold">Sold ({soldCount})</option>
-                <option value="Hold">On Hold ({holdCount})</option>
-              </select>
-
-              <select
-                id="inventory-bhk-filter"
-                value={bhkFilter}
-                onChange={(e) => setBhkFilter(e.target.value)}
-                aria-label="Filter units by configuration"
-                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
-              >
-                <option value="All">All Configurations</option>
-                <option value="2 BHK Luxury">2 BHK Luxury</option>
-                <option value="3 BHK Grand">3 BHK Grand</option>
-                <option value="4 BHK Sky Villa">4 BHK Sky Villa</option>
-              </select>
-            </div>
-
-            {(statusFilter !== 'All' || bhkFilter !== 'All') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusFilter('All');
-                  setBhkFilter('All');
-                }}
-                className="w-full sm:w-auto justify-center px-2.5 py-2 sm:py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-600 flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Reset Filters</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Main Content Area: Either 3D Architectural Tower OR 2D Floor-by-Floor Stacking Grid */}
+      {/* Main Frame: Either Lazy-Loaded 3D View OR Dense 2D Stacking Plan */}
       {viewMode === '3d' ? (
-        <ThreeTowerView
-          project={project}
-          units={projectUnits}
-          visibleUnitIds={filteredUnitIds}
-          selectedUnitId={selectedUnitId}
-          onSelectUnit={(id) => setSelectedUnitId(id)}
-        />
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-3.5 sm:px-6 py-3 sm:py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-500">
-            <span className="font-semibold text-slate-800">
-              Floor-by-Floor Inventory Stacking Matrix ({project.wings.join(' & ')}) · Showing {filteredUnits.length} of {projectUnits.length} Units
-            </span>
-            <span className="text-[11px] sm:text-xs">
-              Tap any unit cell to open the Cost Sheet & Status Inspector
-            </span>
-          </div>
-
-          {filteredUnits.length === 0 ? (
-            <div className="p-8 sm:p-12 text-center space-y-3">
-              <div className="text-sm font-semibold text-slate-800">
-                No apartment units match your active filter ({statusFilter}
-                {bhkFilter !== 'All' ? ` · ${bhkFilter}` : ''})
-              </div>
-              <p className="text-xs text-slate-500">
-                Reset the filter dropdown to inspect all available and sold inventory across {project.name}.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusFilter('All');
-                  setBhkFilter('All');
-                }}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Reset Unit Filters
-              </button>
+        <Suspense
+          fallback={
+            <div className="w-full h-[480px] sm:h-[520px] rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6 flex flex-col justify-between">
+              <div className="h-4 w-48 skeleton-block" />
+              <div className="flex-1 my-6 skeleton-block" />
+              <div className="h-9 w-80 mx-auto skeleton-block" />
             </div>
+          }
+        >
+          <LazyThreeTowerView
+            project={project}
+            units={projectUnits}
+            visibleUnitIds={filteredUnitIds}
+            selectedUnitId={selectedUnitId}
+            onSelectUnit={(id) => setSelectedUnitId(id)}
+          />
+        </Suspense>
+      ) : (
+        <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
+          {filteredUnits.length === 0 ? (
+            <EmptyStateBlock
+              icon={Building2}
+              title="No units match the selected filters"
+              guidance={`Clear the status or configuration filter to inspect all ${projectUnits.length} units in ${project.name}.`}
+              actionLabel="Reset filters"
+              onAction={() => {
+                setStatusFilter('All');
+                setBhkFilter('All');
+              }}
+            />
           ) : (
-            <div className="divide-y divide-slate-200">
-              {floorsDesc.map((floorNum) => {
-                const unitsOnFloor = filteredUnits
-                  .filter((u) => u.floor === floorNum)
-                  .sort((a, b) => a.stackIndex - b.stackIndex);
+            <div className="overflow-x-auto">
+              <table
+                className="w-full border-collapse text-left"
+                role="grid"
+                aria-label={`${project.name} stacking plan`}
+              >
+                <thead>
+                  <tr className="h-9 bg-[var(--subtle)] border-b border-[var(--border)] text-[12px] uppercase tracking-wider text-[var(--text-tertiary)] font-medium">
+                    <th className="sticky left-0 z-10 bg-[var(--subtle)] px-4 w-28 border-r border-[var(--border)]">
+                      Floor
+                    </th>
+                    <th className="px-4">
+                      Stacking plan ({project.wings.join(' · ')}) — Arrow keys navigate, Enter inspects
+                    </th>
+                    <th className="px-4 text-right hidden md:table-cell">
+                      Configuration & area
+                    </th>
+                    <th className="px-4 text-right hidden lg:table-cell">
+                      Typical price
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {floorsDesc.map((floorNum) => {
+                    const allFloorUnits = projectUnits
+                      .filter((u) => u.floor === floorNum)
+                      .sort((a, b) => a.stackIndex - b.stackIndex);
 
-                if (unitsOnFloor.length === 0) return null;
+                    const visibleOnFloor = allFloorUnits.filter((u) =>
+                      filteredUnitIds.has(u.id)
+                    );
+                    if (visibleOnFloor.length === 0) return null;
 
-                const floorAvailCount = unitsOnFloor.filter(
-                  (u) => u.status === 'Available'
-                ).length;
+                    const sampleUnit = visibleOnFloor[0];
+                    const samplePrice = getUnitAllInclusivePrice(sampleUnit);
 
-                return (
-                  <div
-                    key={floorNum}
-                    className="p-3 sm:p-5 flex flex-col lg:flex-row lg:items-center gap-2.5 sm:gap-4 hover:bg-slate-50/60 transition-colors"
-                  >
-                    {/* Floor Label Column: Horizontal strip on mobile/tablet, left column on desktop */}
-                    <div className="lg:w-36 shrink-0 flex lg:block items-center justify-between pb-1.5 lg:pb-0 border-b lg:border-b-0 border-slate-100">
-                      <div className="flex items-center gap-2 lg:block">
-                        <div className="text-xs font-bold text-slate-900 font-mono uppercase">
-                          Floor 0{floorNum}
-                        </div>
-                        <div className="text-[11px] text-slate-500 lg:mt-0.5">
-                          {floorNum === project.floors
-                            ? 'Penthouse Crown'
-                            : 'Typical Plate'}
-                        </div>
-                      </div>
-                      <span className="lg:hidden text-[11px] font-mono font-semibold text-emerald-700">
-                        {floorAvailCount}/{unitsOnFloor.length} Avail
-                      </span>
-                    </div>
+                    return (
+                      <tr
+                        key={floorNum}
+                        className="hover:bg-[var(--subtle)] transition-colors"
+                      >
+                        {/* Pinned Left Floor Column */}
+                        <td className="sticky left-0 z-10 bg-[var(--surface)] px-4 py-1.5 border-r border-[var(--border)] align-middle">
+                          <div className="font-mono tabular-nums t-13-medium text-[var(--text-primary)]">
+                            F{String(floorNum).padStart(2, '0')}
+                          </div>
+                          <div className="t-12 text-[var(--text-tertiary)]">
+                            {floorNum === project.floors ? 'Crown' : 'Typical'}
+                          </div>
+                        </td>
 
-                    {/* 4 Apartment Stack Cells: 2x2 floor plate on mobile/tablet, 1x4 row on desktop */}
-                    <div className="flex-1 grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3">
-                      {unitsOnFloor.map((unit) => {
-                        const isSelected = unit.id === selectedUnitId;
-                        const allInclusive = getUnitAllInclusivePrice(unit);
+                        {/* 76×52px Unit Cells: unit number in mono, configuration in 11px, 14% status fill + 1px status border, ivory hover */}
+                        <td className="px-4 py-1.5 align-middle">
+                          <div className="flex items-center gap-2">
+                            {allFloorUnits.map((unit) => {
+                              const isVisible = filteredUnitIds.has(unit.id);
+                              if (!isVisible) {
+                                return (
+                                  <div
+                                    key={unit.id}
+                                    className="w-[76px] h-[52px] rounded-[6px] border border-dashed border-[var(--border)] opacity-35 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                );
+                              }
 
-                        const cardStyle =
-                          unit.status === 'Available'
-                            ? 'border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-400'
-                            : unit.status === 'Hold'
-                            ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50 hover:border-amber-400'
-                            : 'border-slate-200 bg-slate-100/80 hover:bg-slate-200/60 hover:border-slate-300';
+                              const isSelected = unit.id === selectedUnitId;
+                              const fillVar =
+                                unit.status === 'Available'
+                                  ? 'var(--status-available-fill)'
+                                  : unit.status === 'Hold'
+                                  ? 'var(--status-hold-fill)'
+                                  : 'var(--status-sold-fill)';
+                              const borderVar =
+                                unit.status === 'Available'
+                                  ? 'var(--status-available-border)'
+                                  : unit.status === 'Hold'
+                                  ? 'var(--status-hold-border)'
+                                  : 'var(--status-sold-border)';
+                              const dotVar =
+                                unit.status === 'Available'
+                                  ? 'var(--status-available)'
+                                  : unit.status === 'Hold'
+                                  ? 'var(--status-hold)'
+                                  : 'var(--status-sold)';
 
-                        return (
-                          <button
-                            key={unit.id}
-                            type="button"
-                            onClick={() => setSelectedUnitId(unit.id)}
-                            className={`p-2.5 sm:p-3.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-w-0 ${cardStyle} ${
-                              isSelected
-                                ? 'ring-2 ring-indigo-600 border-indigo-600'
-                                : ''
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between gap-1.5">
-                                <span className="font-mono text-sm sm:text-base font-bold text-slate-900 tabular-nums">
-                                  {unit.unitNumber}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold shrink-0 ${
-                                    unit.status === 'Available'
-                                      ? 'text-emerald-700'
-                                      : unit.status === 'Hold'
-                                      ? 'text-amber-700'
-                                      : 'text-slate-600'
-                                  }`}
+                              const cellKey = `${unit.floor}-${unit.stackIndex}`;
+                              const shortConfig = unit.bhk.replace(' Luxury', '').replace(' Grand', '').replace(' Sky Villa', '');
+
+                              return (
+                                <button
+                                  key={unit.id}
+                                  ref={(el) => {
+                                    cellRefs.current[cellKey] = el;
+                                  }}
+                                  type="button"
+                                  onClick={() => setSelectedUnitId(unit.id)}
+                                  onKeyDown={(e) =>
+                                    handleCellKeyDown(
+                                      e,
+                                      unit.floor,
+                                      unit.stackIndex,
+                                      unit.id
+                                    )
+                                  }
+                                  aria-label={`Unit ${unit.unitNumber}, ${unit.status}, ${unit.bhk}, ${formatInr(
+                                    getUnitAllInclusivePrice(unit)
+                                  )}`}
+                                  style={{
+                                    backgroundColor: isSelected
+                                      ? 'var(--ivory-band)'
+                                      : fillVar,
+                                    borderColor: isSelected
+                                      ? '#272757'
+                                      : borderVar,
+                                    borderWidth: isSelected ? '2px' : '1px',
+                                  }}
+                                  className="stacking-cell w-[76px] h-[52px] shrink-0 rounded-[6px] px-2 py-1 flex flex-col justify-between text-left cursor-pointer"
                                 >
-                                  {unit.status === 'Available' && (
-                                    <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                                  )}
-                                  {unit.status === 'Hold' && (
-                                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                                  )}
-                                  {unit.status === 'Sold' && (
-                                    <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                                  )}
-                                  <span>{unit.status}</span>
-                                </span>
-                              </div>
+                                  <div className="flex items-center justify-between w-full">
+                                    <span className="font-mono tabular-nums t-13-medium text-[var(--text-primary)]">
+                                      {unit.unitNumber}
+                                    </span>
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: dotVar }}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between w-full text-[11px] leading-[14px] text-[var(--text-secondary)]">
+                                    <span className="truncate">{shortConfig}</span>
+                                    <span className="font-mono tabular-nums text-[10px]">
+                                      {unit.status === 'Available'
+                                        ? formatInr(
+                                            getUnitAllInclusivePrice(unit)
+                                          )
+                                            .replace('₹', '')
+                                            .replace(' Cr', 'C')
+                                        : unit.status === 'Hold'
+                                        ? 'Hold'
+                                        : 'Sold'}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
 
-                              <div className="text-[11px] sm:text-xs font-medium text-slate-700 mt-1 truncate">
-                                {unit.bhk}
-                              </div>
-                            </div>
+                        {/* Floor Configuration Summary */}
+                        <td className="px-4 py-1.5 text-right align-middle hidden md:table-cell">
+                          <div className="t-12 text-[var(--text-secondary)]">
+                            {sampleUnit.bhk}
+                          </div>
+                          <div className="font-mono tabular-nums t-12 text-[var(--text-tertiary)]">
+                            {formatArea(sampleUnit.carpetAreaSqFt)}
+                          </div>
+                        </td>
 
-                            <div className="mt-2.5 sm:mt-3 pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs">
-                              <span className="text-slate-500 font-mono tabular-nums whitespace-nowrap">
-                                {unit.carpetAreaSqFt} sq.ft
-                              </span>
-                              <span className="font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
-                                {formatInrCompact(allInclusive)}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                        {/* Typical Floor Price */}
+                        <td className="px-4 py-1.5 text-right align-middle hidden lg:table-cell font-mono tabular-nums t-13 text-[var(--text-primary)]">
+                          {formatInr(samplePrice)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

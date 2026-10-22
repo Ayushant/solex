@@ -1,143 +1,128 @@
 import React, { useState } from 'react';
+import { useSolexStore } from '../store/useSolexStore';
 import {
-  useSolexStore,
-  formatInrCompact,
-} from '../store/useSolexStore';
+  formatInr,
+  formatInrFull,
+  formatPct,
+  formatShortDate,
+  SectionTitle,
+  ProjectChip,
+  getProjectColor,
+  CATEGORY_PALETTE,
+  EmptyStateBlock,
+} from '../lib/formatters';
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import {
-  Building2,
-  Layers,
-  IndianRupee,
-  Wallet,
-  ArrowUpRight,
-  ArrowUp,
-  ArrowDown,
-  PlusCircle,
-  Minus,
-  Download,
-} from 'lucide-react';
-
-function calculateMoMChangePct(current: number, previous: number): number {
-  if (!previous || previous === 0) return 0;
-  return ((current - previous) / previous) * 100;
-}
-
-const TrendDeltaIndicator: React.FC<{
-  changePct: number;
-  comparisonLabel: string;
-}> = ({ changePct, comparisonLabel }) => {
-  const isPositive = changePct > 0.05;
-  const isNegative = changePct < -0.05;
-  const formattedPct = `${isPositive ? '+' : ''}${changePct.toFixed(1)}%`;
-
-  return (
-    <div
-      className={`inline-flex items-center gap-1 text-xs font-semibold font-mono tabular-nums whitespace-nowrap shrink-0 ${
-        isPositive
-          ? 'text-emerald-600'
-          : isNegative
-          ? 'text-red-600'
-          : 'text-slate-500'
-      }`}
-      title={`${formattedPct} compared to ${comparisonLabel}`}
-    >
-      {isPositive && (
-        <span
-          className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-50 text-emerald-600 shrink-0"
-          aria-hidden="true"
-        >
-          <ArrowUp className="w-3 h-3 stroke-[2.5]" />
-        </span>
-      )}
-      {isNegative && (
-        <span
-          className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-red-50 text-red-600 shrink-0"
-          aria-hidden="true"
-        >
-          <ArrowDown className="w-3 h-3 stroke-[2.5]" />
-        </span>
-      )}
-      {!isPositive && !isNegative && (
-        <span
-          className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-slate-100 text-slate-500 shrink-0"
-          aria-hidden="true"
-        >
-          <Minus className="w-3 h-3 stroke-[2.5]" />
-        </span>
-      )}
-      <span>{formattedPct}</span>
-      <span className="font-sans font-normal text-slate-400">
-        vs {comparisonLabel}
-      </span>
-    </div>
-  );
-};
+import { ArrowRight, MoreHorizontal, Activity } from 'lucide-react';
 
 export const CommandCentreView: React.FC = () => {
   const {
     projects,
     units,
+    leads,
     bookings,
     monthlySales,
     activities,
     setActiveScreen,
     openBookingModal,
+    setSelectedProjectId,
   } = useSolexStore();
 
-  const [chartMetric, setChartMetric] = useState<'conversions' | 'volume'>('conversions');
   const [activityFilter, setActivityFilter] = useState<string>('All');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Derive current month and previous month series points directly from the store
   const currentMonthPoint = monthlySales[monthlySales.length - 1];
-  const prevMonthPoint =
-    monthlySales.length >= 2
-      ? monthlySales[monthlySales.length - 2]
-      : currentMonthPoint;
 
-  // 1. Total Active Projects & MoM % Change
   const totalActiveProjects = projects.length;
-  const projectsGrowthNum = calculateMoMChangePct(
-    totalActiveProjects,
-    prevMonthPoint.activeProjectsCount
-  );
-
-  // 2. Total Inventory Available vs. Sold & MoM Sold Conversions % Change
   const totalUnits = units.length;
   const availableUnits = units.filter((u) => u.status === 'Available').length;
   const holdUnits = units.filter((u) => u.status === 'Hold').length;
   const soldUnits = units.filter((u) => u.status === 'Sold').length;
-  const soldConversionsGrowthNum = calculateMoMChangePct(
-    currentMonthPoint.conversions,
-    prevMonthPoint.conversions
+
+  const monthlySalesVolumeInr = Math.round(
+    (currentMonthPoint?.salesVolumeCr ?? 0) * 10000000
   );
 
-  // 3. Monthly Sales Volume (INR) & MoM % Change
-  const monthlySalesVolumeInr = Math.round(currentMonthPoint.salesVolumeCr * 10000000);
-  const salesVolumeGrowthNum = calculateMoMChangePct(
-    currentMonthPoint.salesVolumeCr,
-    prevMonthPoint.salesVolumeCr
-  );
-
-  // 4. Pending Broker Commissions (INR) & MoM % Change
   const pendingCommissionsInr = bookings
     .filter((b) => b.commissionStatus !== 'Released')
     .reduce((sum, b) => sum + b.commissionAmountInr, 0);
-  const commissionGrowthNum = calculateMoMChangePct(
-    pendingCommissionsInr,
-    prevMonthPoint.pendingCommissionsInr
-  );
 
-  const pendingBookingCount = bookings.filter(
-    (b) => b.commissionStatus !== 'Released'
+  // Needs attention counts derived from real store state
+  const holdsExpiringCount = holdUnits;
+  const staleLeadsCount = leads.filter(
+    (l) => l.stage !== 'Booked' && (l.stage === 'New' || l.stage === 'Site Visit')
   ).length;
+  const invoicesAwaitingApprovalCount = bookings.filter(
+    (b) => b.commissionStatus === 'Pending Approval'
+  ).length;
+  const payoutsReadyCount = bookings.filter(
+    (b) => b.commissionStatus === 'Approved'
+  ).length;
+
+  const attentionItems = [
+    {
+      id: 'holds',
+      label: 'Holds expiring in under 24h',
+      count: holdsExpiringCount,
+      dotColor: 'var(--status-hold)',
+      tintColor: 'var(--status-hold-tint)',
+      detail: holdsExpiringCount > 0 ? 'Hold ends in 5h 12m' : 'No active holds',
+      actionLabel: 'Review holds',
+      onClick: () => setActiveScreen('projects'),
+    },
+    {
+      id: 'leads',
+      label: 'Leads idle 7+ days',
+      count: staleLeadsCount,
+      dotColor: 'var(--status-booked)',
+      tintColor: 'var(--status-booked-tint)',
+      detail: `${staleLeadsCount} open inquiries`,
+      actionLabel: 'View pipeline',
+      onClick: () => setActiveScreen('leads'),
+    },
+    {
+      id: 'invoices',
+      label: 'Invoices awaiting approval',
+      count: invoicesAwaitingApprovalCount,
+      dotColor: 'var(--status-hold)',
+      tintColor: 'var(--status-hold-tint)',
+      detail:
+        invoicesAwaitingApprovalCount > 0
+          ? formatInr(
+              bookings
+                .filter((b) => b.commissionStatus === 'Pending Approval')
+                .reduce((s, b) => s + b.commissionAmountInr, 0)
+            )
+          : '₹0',
+      actionLabel: 'Audit invoices',
+      onClick: () => setActiveScreen('finance'),
+    },
+    {
+      id: 'payouts',
+      label: 'Payouts ready to release',
+      count: payoutsReadyCount,
+      dotColor: 'var(--status-available)',
+      tintColor: 'var(--status-available-tint)',
+      detail:
+        payoutsReadyCount > 0
+          ? formatInr(
+              bookings
+                .filter((b) => b.commissionStatus === 'Approved')
+                .reduce((s, b) => s + b.commissionAmountInr, 0)
+            )
+          : '₹0',
+      actionLabel: 'Release payouts',
+      onClick: () => setActiveScreen('finance'),
+    },
+  ];
 
   const filteredActivities =
     activityFilter === 'All'
@@ -152,76 +137,26 @@ export const CommandCentreView: React.FC = () => {
     return str;
   };
 
-  const formatSignedPct = (val: number) =>
-    `${val > 0 ? '+' : ''}${val.toFixed(1)}%`;
-
-  const handleExportCommandCentreCsv = () => {
+  const handleExportOverviewCsv = () => {
     const rows: (string | number)[][] = [
-      ['soleX Management Command Centre — Performance Report'],
+      ['soleX Overview Report'],
       ['Generated At', new Date().toISOString()],
       [],
-      ['EXECUTIVE KPI SUMMARY'],
-      ['Metric', 'Current Value', `Previous Month (${prevMonthPoint.month})`, `MoM Trend vs ${prevMonthPoint.month}`],
-      [
-        'Total Active Projects',
-        totalActiveProjects,
-        prevMonthPoint.activeProjectsCount,
-        formatSignedPct(projectsGrowthNum),
-      ],
-      [
-        'Monthly Unit Conversions (Sold Velocity)',
-        currentMonthPoint.conversions,
-        prevMonthPoint.conversions,
-        formatSignedPct(soldConversionsGrowthNum),
-      ],
-      ['Total Mandate Units', totalUnits, '-', '-'],
-      ['Units Available', availableUnits, '-', '-'],
-      ['Units On Hold', holdUnits, '-', '-'],
-      ['Cumulative Units Sold', soldUnits, '-', '-'],
-      [
-        'Monthly Sales Volume (INR)',
-        monthlySalesVolumeInr,
-        Math.round(prevMonthPoint.salesVolumeCr * 10000000),
-        formatSignedPct(salesVolumeGrowthNum),
-      ],
-      [
-        'Pending Broker Commissions (INR)',
-        pendingCommissionsInr,
-        prevMonthPoint.pendingCommissionsInr,
-        formatSignedPct(commissionGrowthNum),
-      ],
+      ['Metric', 'Value'],
+      ['Active projects', totalActiveProjects],
+      ['Units available', availableUnits],
+      ['Units on hold', holdUnits],
+      ['Units sold', soldUnits],
+      ['Bookings this month (INR)', monthlySalesVolumeInr],
+      ['Pending commissions (INR)', pendingCommissionsInr],
       [],
-      ['6-MONTH SALES VELOCITY & CONVERSIONS'],
-      ['Month', 'Active Projects', 'Leads Generated', 'Unit Conversions', 'Sales Volume (Cr INR)', 'Pending Commissions (INR)'],
+      ['Month', 'Leads generated', 'Conversions', 'Sales volume (Cr INR)'],
       ...monthlySales.map((m) => [
         m.month,
-        m.activeProjectsCount,
         m.leadsGenerated,
         m.conversions,
         m.salesVolumeCr,
-        m.pendingCommissionsInr,
       ]),
-      [],
-      ['PROJECT MANDATE ABSORPTION BREAKDOWN'],
-      ['Project Name', 'Location', 'Developer', 'Mandate Type', 'Total Units', 'Available', 'On Hold', 'Sold', 'Absorption (%)'],
-      ...projects.map((p) => {
-        const pUnits = units.filter((u) => u.projectId === p.id);
-        const pAvail = pUnits.filter((u) => u.status === 'Available').length;
-        const pHold = pUnits.filter((u) => u.status === 'Hold').length;
-        const pSold = pUnits.filter((u) => u.status === 'Sold').length;
-        const pct = Math.round((pSold / pUnits.length) * 100);
-        return [
-          p.name,
-          p.location,
-          p.developerName,
-          p.mandateType,
-          pUnits.length,
-          pAvail,
-          pHold,
-          pSold,
-          `${pct}%`,
-        ];
-      }),
     ];
 
     const csvContent = rows
@@ -232,7 +167,7 @@ export const CommandCentreView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'solex-command-centre-performance.csv');
+    link.setAttribute('download', 'solex-overview.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -240,370 +175,459 @@ export const CommandCentreView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Top Executive Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Management Command Centre
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-relaxed">
-            Real-time portfolio absorption, sales velocity, and channel partner payout ledger across all active developer mandates.
+    <div className="space-y-6">
+      {/* Ink-Wash Header Band (Used once on Overview header & Sign-in panel) */}
+      <div className="ink-wash-band rounded-[10px] p-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="t-22-title text-[var(--text-primary)]">Overview</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-1">
+            Mandate absorption, monthly booking velocity, and channel partner settlements.
           </p>
         </div>
 
-        {/* Responsive Action Group: 2x2 grid on narrow mobile, horizontal row on tablet/desktop */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+        {/* Desktop Actions */}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={handleExportCommandCentreCsv}
-            className="col-span-1 justify-center px-3 py-2.5 sm:py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            onClick={handleExportOverviewCsv}
+            className="btn-secondary"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-            <span>Export CSV</span>
+            Export CSV
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('projects')}
-            className="col-span-1 justify-center px-3 py-2.5 sm:py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 flex items-center transition-colors cursor-pointer whitespace-nowrap"
+            className="btn-secondary"
           >
-            <span>2D / 3D Inventory</span>
+            Inventory
           </button>
           <button
             type="button"
             onClick={() => openBookingModal()}
-            className="col-span-2 sm:col-span-1 justify-center px-3.5 py-2.5 sm:py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer whitespace-nowrap"
+            className="btn-primary"
           >
-            <PlusCircle className="w-4 h-4 shrink-0" />
-            <span>Convert Lead to Booking</span>
+            New booking
           </button>
         </div>
+
+        {/* Mobile (< 640px) Actions Menu */}
+        <div className="relative sm:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            className="btn-secondary px-2"
+            aria-label="Page actions"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {mobileMenuOpen && (
+            <div className="absolute right-0 mt-1 w-44 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openBookingModal();
+                }}
+                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+              >
+                New booking
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setActiveScreen('projects');
+                }}
+                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+              >
+                Inventory
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleExportOverviewCsv();
+                }}
+                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+              >
+                Export CSV
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 4 Live KPI Cards: 1-col on mobile, 2x2 on tablet (sm/md/lg), 4-col on desktop (xl) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4">
-        {/* KPI 1: Total Active Projects */}
-        <div
-          onClick={() => setActiveScreen('projects')}
-          className="p-4 sm:p-5 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between gap-2 text-slate-500">
-            <span className="text-xs font-semibold truncate">
-              Total Active Projects
-            </span>
-            <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">
-              {totalActiveProjects}
-            </span>
-            <TrendDeltaIndicator
-              changePct={projectsGrowthNum}
-              comparisonLabel={prevMonthPoint.month}
-            />
-          </div>
-
-          <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between gap-2">
-            <span className="truncate">
-              Prev ({prevMonthPoint.month}): {prevMonthPoint.activeProjectsCount} Mandates
-            </span>
-            <span className="text-indigo-600 font-medium flex items-center gap-0.5 shrink-0">
-              <span>View</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
+      {/* 1. Needs Attention List */}
+      <section aria-label="Needs attention" className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <SectionTitle>Needs attention</SectionTitle>
+          <span className="t-12 font-mono tabular-nums text-[var(--text-tertiary)]">
+            {holdsExpiringCount +
+              staleLeadsCount +
+              invoicesAwaitingApprovalCount +
+              payoutsReadyCount}{' '}
+            items
+          </span>
         </div>
 
-        {/* KPI 2: Total Inventory Available vs. Sold */}
-        <div
-          onClick={() => setActiveScreen('projects')}
-          className="p-4 sm:p-5 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between gap-2 text-slate-500">
-            <span className="text-xs font-semibold truncate">
-              Inventory: Available vs. Sold
-            </span>
-            <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
-          </div>
+        <div className="border border-[var(--border)] rounded-[10px] divide-y divide-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          {attentionItems.map((item) => (
+            <div
+              key={item.id}
+              onClick={item.onClick}
+              className="px-4 h-11 flex items-center justify-between gap-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: item.dotColor }}
+                />
+                <span className="t-13 text-[var(--text-primary)] truncate">
+                  {item.label}
+                </span>
+                <span
+                  className="px-2 py-0.5 rounded-[6px] font-mono tabular-nums t-12"
+                  style={{
+                    backgroundColor: item.tintColor,
+                    color: item.dotColor,
+                  }}
+                >
+                  {item.count}
+                </span>
+              </div>
 
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5">
-            <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-              <span className="text-2xl sm:text-3xl font-bold text-emerald-600 font-mono tabular-nums">
-                {availableUnits}
-              </span>
-              <span className="text-xs text-slate-400">Avail</span>
-              <span className="text-slate-300">/</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-800 font-mono tabular-nums">
-                {soldUnits}
-              </span>
-              <span className="text-xs text-slate-500">Sold</span>
+              <div className="flex items-center gap-4 shrink-0">
+                <span className="hidden md:inline font-mono tabular-nums t-12 text-[var(--text-secondary)]">
+                  {item.detail}
+                </span>
+                <span className="t-12 text-[var(--accent)] inline-flex items-center gap-1 font-medium">
+                  <span>{item.actionLabel}</span>
+                  <ArrowRight className="w-3 h-3" />
+                </span>
+              </div>
             </div>
+          ))}
+        </div>
+      </section>
 
-            <TrendDeltaIndicator
-              changePct={soldConversionsGrowthNum}
-              comparisonLabel={prevMonthPoint.month}
+      {/* 2. Four Metrics (label, 28px mono value, category dot; no icons, no fake trends) */}
+      <section
+        aria-label="Key metrics"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[var(--border)] rounded-[10px] divide-y sm:divide-y-0 sm:divide-x divide-[var(--border)] bg-[var(--surface)] overflow-hidden"
+      >
+        {/* Active projects */}
+        <div
+          onClick={() => setActiveScreen('projects')}
+          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: CATEGORY_PALETTE[0] }}
             />
+            <span>Active projects</span>
           </div>
-
-          <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between gap-2">
-            <span className="font-mono tabular-nums">
-              Stock: {totalUnits} Units
-            </span>
-            <span className="text-amber-700 font-mono tabular-nums shrink-0">
-              {holdUnits} on Hold
-            </span>
+          <div className="t-28 text-[var(--text-primary)] mt-1.5">
+            {totalActiveProjects}
+          </div>
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+            {totalUnits} mandate units
           </div>
         </div>
 
-        {/* KPI 3: Monthly Sales Volume (INR) */}
+        {/* Units available / sold */}
+        <div
+          onClick={() => setActiveScreen('projects')}
+          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: CATEGORY_PALETTE[3] }}
+            />
+            <span>Units available / sold</span>
+          </div>
+          <div className="t-28 text-[var(--text-primary)] mt-1.5">
+            {availableUnits} / {soldUnits}
+          </div>
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+            {holdUnits} on hold · {formatPct((soldUnits / totalUnits) * 100)} sold
+          </div>
+        </div>
+
+        {/* Bookings this month (₹) — Headline figure in Eclipse 800 */}
         <div
           onClick={() => setActiveScreen('leads')}
-          className="p-4 sm:p-5 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer flex flex-col justify-between"
+          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center justify-between gap-2 text-slate-500">
-            <span className="text-xs font-semibold truncate">
-              Monthly Sales Volume (₹)
-            </span>
-            <IndianRupee className="w-4 h-4 text-indigo-600 shrink-0" />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums whitespace-nowrap">
-              {formatInrCompact(monthlySalesVolumeInr)}
-            </span>
-            <TrendDeltaIndicator
-              changePct={salesVolumeGrowthNum}
-              comparisonLabel={prevMonthPoint.month}
+          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: CATEGORY_PALETTE[1] }}
             />
+            <span>Bookings this month</span>
           </div>
-
-          <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between gap-2">
-            <span className="font-mono tabular-nums truncate">
-              Prev: ₹{prevMonthPoint.salesVolumeCr} Cr
-            </span>
-            <span className="font-semibold text-slate-800 font-mono tabular-nums shrink-0">
-              {currentMonthPoint.conversions} Bookings
-            </span>
+          <div
+            className="t-28 text-[var(--money-total)] mt-1.5"
+            title={formatInrFull(monthlySalesVolumeInr)}
+          >
+            {formatInr(monthlySalesVolumeInr)}
+          </div>
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+            {currentMonthPoint.conversions} confirmed allotments
           </div>
         </div>
 
-        {/* KPI 4: Pending Broker Commissions (INR) */}
+        {/* Pending commissions (₹) — Headline payout figure in Eclipse 800 */}
         <div
           onClick={() => setActiveScreen('finance')}
-          className="p-4 sm:p-5 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer flex flex-col justify-between"
+          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center justify-between gap-2 text-slate-500">
-            <span className="text-xs font-semibold truncate">
-              Pending Broker Commissions (₹)
-            </span>
-            <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums whitespace-nowrap">
-              {formatInrCompact(pendingCommissionsInr)}
-            </span>
-            <TrendDeltaIndicator
-              changePct={commissionGrowthNum}
-              comparisonLabel={prevMonthPoint.month}
+          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: CATEGORY_PALETTE[4] }}
             />
+            <span>Pending commissions</span>
           </div>
-
-          <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between gap-2">
-            <span className="font-mono tabular-nums truncate">
-              Prev: {formatInrCompact(prevMonthPoint.pendingCommissionsInr)}
-            </span>
-            <span className="text-amber-700 font-medium font-mono tabular-nums shrink-0">
-              {pendingBookingCount} Tranches
-            </span>
+          <div
+            className="t-28 text-[var(--money-total)] mt-1.5"
+            title={formatInrFull(pendingCommissionsInr)}
+          >
+            {formatInr(pendingCommissionsInr)}
+          </div>
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+            {invoicesAwaitingApprovalCount + payoutsReadyCount} active tranches
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Main Split: 6-Month Recharts Bar Chart (Left 7 Cols) + Live Activity Feed (Right 5 Cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
-        {/* Left: Recharts Bar Chart */}
-        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Sales Conversions (Last 6 Months)
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Updates instantaneously when a lead is converted to a confirmed booking.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 sm:flex items-center gap-1 p-1 bg-slate-100 rounded-lg w-full sm:w-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setChartMetric('conversions')}
-                  className={`px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                    chartMetric === 'conversions'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Unit Conversions
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartMetric('volume')}
-                  className={`px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                    chartMetric === 'volume'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Sales Volume (₹ Cr)
-                </button>
-              </div>
+      {/* 3. Sales Chart + Project Absorption Rows */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Sales Chart: Eclipse 800 bars + slate line, 1px Paper 100 gridlines, no gradients */}
+        <div className="lg:col-span-7 border border-[var(--border)] rounded-[10px] p-5 bg-[var(--surface)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <SectionTitle>Sales velocity</SectionTitle>
+              <p className="t-12 text-[var(--text-tertiary)] mt-0.5">
+                Monthly bookings (bars) against qualified lead inflow (line)
+              </p>
             </div>
-
-            <div className="h-60 sm:h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={monthlySales}
-                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    axisLine={{ stroke: '#cbd5e1' }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#f1f5f9' }}
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#f8fafc',
-                      fontSize: '12px',
-                    }}
-                    formatter={(value: number) =>
-                      chartMetric === 'conversions'
-                        ? [`${value} Units Booked`, 'Conversions']
-                        : [`₹${value} Cr`, 'Gross Sales Volume']
-                    }
-                  />
-                  <Bar
-                    dataKey={chartMetric === 'conversions' ? 'conversions' : 'salesVolumeCr'}
-                    fill="#4f46e5"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={42}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex items-center gap-4 t-12 text-[var(--text-secondary)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="w-2.5 h-2.5 rounded-[2px]"
+                  style={{ backgroundColor: '#272757' }}
+                />
+                <span>Bookings</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="w-3 h-0.5"
+                  style={{ backgroundColor: '#6D8196' }}
+                />
+                <span>Leads</span>
+              </span>
             </div>
           </div>
 
-          {/* Mandate Portfolio Breakdown Strip */}
-          <div className="mt-5 sm:mt-6 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
-            {projects.map((proj) => {
+          <div className="h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={monthlySales}
+                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--border-subtle)"
+                  strokeWidth={1}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: 'var(--subtle)' }}
+                  contentStyle={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar
+                  dataKey="conversions"
+                  name="Bookings"
+                  fill="#272757"
+                  radius={[3, 3, 0, 0]}
+                  maxBarSize={24}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="leadsGenerated"
+                  name="Leads"
+                  stroke="#6D8196"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#6D8196', strokeWidth: 0 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Per-Project Absorption Rows (Project chip, thin progress bar in project colour, "8 / 24 sold") */}
+        <div className="lg:col-span-5 border border-[var(--border)] rounded-[10px] p-5 bg-[var(--surface)]">
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle>Project absorption</SectionTitle>
+            <span className="t-12 font-mono tabular-nums text-[var(--text-tertiary)]">
+              {soldUnits} / {totalUnits} sold
+            </span>
+          </div>
+
+          <div className="divide-y divide-[var(--border)]">
+            {projects.map((proj, idx) => {
               const pUnits = units.filter((u) => u.projectId === proj.id);
               const pSold = pUnits.filter((u) => u.status === 'Sold').length;
-              const pAvail = pUnits.filter((u) => u.status === 'Available').length;
+              const pHold = pUnits.filter((u) => u.status === 'Hold').length;
               const pct = Math.round((pSold / pUnits.length) * 100);
+              const projColor = getProjectColor(proj.id, idx);
+
               return (
                 <div
                   key={proj.id}
-                  className="text-xs flex sm:block items-center justify-between gap-2 py-1 sm:py-0"
+                  onClick={() => {
+                    setSelectedProjectId(proj.id);
+                    setActiveScreen('projects');
+                  }}
+                  className="py-3 first:pt-1 last:pb-1 hover:bg-[var(--subtle)] -mx-2 px-2 rounded-[6px] transition-colors cursor-pointer space-y-2"
                 >
-                  <div className="font-semibold text-slate-900 truncate">
-                    {proj.name}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ProjectChip projectId={proj.id} name={proj.name} />
+                      <span className="t-12 text-[var(--text-tertiary)] truncate">
+                        {proj.location}
+                      </span>
+                    </div>
+                    <span className="t-12 font-mono tabular-nums text-[var(--text-primary)] shrink-0">
+                      {pSold} / {pUnits.length} sold
+                    </span>
                   </div>
-                  <div className="text-slate-500 font-mono tabular-nums sm:mt-0.5 shrink-0">
-                    {pSold}/{pUnits.length} Sold ({pct}%) · {pAvail} Avail
+
+                  <div className="w-full h-1.5 bg-[var(--bg)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full transition-all duration-150"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: projColor,
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between t-12 text-[var(--text-tertiary)] font-mono tabular-nums">
+                    <span>RERA {proj.reraNumber}</span>
+                    <span>
+                      {pHold} on hold · {formatPct((pSold / pUnits.length) * 100)}
+                    </span>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
+      </div>
 
-        {/* Right: Scrolling Real-Time Activity Feed */}
-        <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Live Mandate Activity Feed
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Audit stream of bookings, unit holds, and channel leads.
-                </p>
-              </div>
-
-              <select
-                value={activityFilter}
-                onChange={(e) => setActivityFilter(e.target.value)}
-                aria-label="Filter mandate activity feed"
-                className="w-full sm:w-auto px-2.5 py-2 sm:py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-slate-50"
-              >
-                <option value="All">All Events ({activities.length})</option>
-                <option value="Booking">Bookings</option>
-                <option value="Lead">Leads</option>
-                <option value="Inventory">Inventory Holds</option>
-                <option value="Commission">Commissions</option>
-              </select>
-            </div>
-
-            <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto pr-1">
-              {filteredActivities.map((act) => {
-                const proj = projects.find((p) => p.id === act.projectId);
-                return (
-                  <div key={act.id} className="py-3.5 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="font-semibold text-slate-800">
-                          {act.category}
-                        </span>
-                        <span>·</span>
-                        <span className="truncate">{proj?.name}</span>
-                        <span className="hidden sm:inline">·</span>
-                        <span className="hidden sm:inline">{act.actorRole}</span>
-                      </div>
-                      <span className="font-mono text-[11px] text-slate-400 shrink-0">
-                        {act.timestamp}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-700 mt-1 leading-relaxed">
-                      {act.message}
-                    </p>
-
-                    {act.amountInr && (
-                      <div className="mt-1 text-xs font-mono font-semibold text-indigo-600 tabular-nums">
-                        Transaction Value: {formatInrCompact(act.amountInr)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Showing {filteredActivities.length} recent audit events</span>
-            <button
-              type="button"
-              onClick={() => setActiveScreen('leads')}
-              className="text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer"
-            >
-              Open Lead Pipeline →
-            </button>
+      {/* 4. Activity Timeline: mono time · event dot · one line */}
+      <section aria-label="Activity timeline" className="space-y-2.5">
+        <div className="flex items-center justify-between gap-4">
+          <SectionTitle>Activity</SectionTitle>
+          <div className="flex items-center gap-1">
+            {['All', 'Booking', 'Lead', 'Inventory', 'Commission'].map(
+              (cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActivityFilter(cat)}
+                  className={`btn-sm rounded-[6px] cursor-pointer transition-colors ${
+                    activityFilter === cat
+                      ? 'bg-[var(--surface)] border border-[var(--border)] text-[var(--accent)] font-medium'
+                      : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              )
+            )}
           </div>
         </div>
-      </div>
+
+        <div className="border border-[var(--border)] rounded-[10px] divide-y divide-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          {filteredActivities.length === 0 ? (
+            <EmptyStateBlock
+              icon={Activity}
+              title={`No activity events in ${activityFilter}`}
+              guidance="Reset the category filter to view all recent mandate transactions."
+              actionLabel="Show all events"
+              onAction={() => setActivityFilter('All')}
+            />
+          ) : (
+            filteredActivities.map((act) => {
+              const proj = projects.find((p) => p.id === act.projectId);
+              const dotColor =
+                act.category === 'Booking'
+                  ? 'var(--status-booked)'
+                  : act.category === 'Commission'
+                  ? 'var(--status-available)'
+                  : act.category === 'Inventory'
+                  ? 'var(--status-hold)'
+                  : '#6D8196';
+
+              return (
+                <div
+                  key={act.id}
+                  className="px-4 h-10 flex items-center justify-between gap-4 hover:bg-[var(--subtle)] transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0 truncate">
+                    <span className="font-mono tabular-nums t-12 text-[var(--text-tertiary)] shrink-0 w-24">
+                      {formatShortDate(act.timestamp)}
+                    </span>
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: dotColor }}
+                    />
+                    <span className="t-13 text-[var(--text-primary)] truncate">
+                      {act.message}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {act.amountInr && (
+                      <span
+                        className="font-mono tabular-nums t-12 text-[var(--text-primary)]"
+                        title={formatInrFull(act.amountInr)}
+                      >
+                        {formatInr(act.amountInr)}
+                      </span>
+                    )}
+                    {proj && (
+                      <span className="hidden sm:inline">
+                        <ProjectChip projectId={proj.id} name={proj.name} />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
 };

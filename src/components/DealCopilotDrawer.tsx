@@ -1,19 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   useSolexStore,
-  formatInrCompact,
   getUnitAllInclusivePrice,
 } from '../store/useSolexStore';
-import {
-  X,
-  Send,
-  Bot,
-  User,
-  Zap,
-  Cpu,
-  BrainCircuit,
-  RotateCcw,
-} from 'lucide-react';
+import { formatInr } from '../lib/formatters';
+import { X, RotateCcw } from 'lucide-react';
 
 interface ChatMessage {
   id: string;
@@ -22,7 +13,10 @@ interface ChatMessage {
   modelUsed?: string;
 }
 
-type ModelTier = 'gemini-3.8-flash' | 'gemini-3.1-flash-lite' | 'gemini-4-argon';
+type ModelTier =
+  | 'gemini-3.8-flash'
+  | 'gemini-3.1-flash-lite'
+  | 'gemini-4-argon';
 
 export const DealCopilotDrawer: React.FC = () => {
   const {
@@ -38,14 +32,15 @@ export const DealCopilotDrawer: React.FC = () => {
     selectedProjectId,
   } = useSolexStore();
 
-  const [selectedModel, setSelectedModel] = useState<ModelTier>('gemini-3.8-flash');
+  const [selectedModel, setSelectedModel] =
+    useState<ModelTier>('gemini-3.8-flash');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-1',
       role: 'model',
-      text: 'Welcome to the soleX Deal & Mandate Copilot. I have real-time visibility into your project inventory, buyer lead stages, and channel partner commissions. How can I assist with your mandate operations today?',
+      text: 'Ready with live project inventory, lead stages, and commission ledger state. Ask about available units, cost sheets, or payout calculations.',
       modelUsed: 'gemini-3.8-flash',
     },
   ]);
@@ -59,9 +54,9 @@ export const DealCopilotDrawer: React.FC = () => {
   if (!isCopilotOpen) return null;
 
   const activeBroker = brokers.find((b) => b.id === activeBrokerId);
-  const activeProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
+  const activeProject =
+    projects.find((p) => p.id === selectedProjectId) || projects[0];
 
-  // Build live portfolio state summary for grounding Gemini responses
   const buildLiveSnapshot = () => {
     const projSummaries = projects
       .map((p) => {
@@ -73,7 +68,7 @@ export const DealCopilotDrawer: React.FC = () => {
           .slice(0, 6)
           .map(
             (u) =>
-              `Unit ${u.unitNumber} (${u.bhk}, ${u.carpetAreaSqFt} sq.ft, ${formatInrCompact(
+              `Unit ${u.unitNumber} (${u.bhk}, ${u.carpetAreaSqFt} sq ft, ${formatInr(
                 getUnitAllInclusivePrice(u)
               )})`
           )
@@ -90,7 +85,7 @@ export const DealCopilotDrawer: React.FC = () => {
     const leadSummary = visibleLeads
       .map(
         (l) =>
-          `- ${l.buyerName} (${l.stage}, ${l.interestedBhk}, Budget ${formatInrCompact(
+          `- ${l.buyerName} (${l.stage}, ${l.interestedBhk}, Budget ${formatInr(
             l.budgetInr
           )})`
       )
@@ -111,7 +106,7 @@ export const DealCopilotDrawer: React.FC = () => {
         : `Channel Partner (${activeBroker?.name} - ${activeBroker?.firmName})`
     }
 Currently Selected Project: ${activeProject.name}
-Pending Commissions in Current Scope: ${formatInrCompact(pendingCommInr)}
+Pending Commissions in Current Scope: ${formatInr(pendingCommInr)}
 
 Projects & Live Unit Inventory:
 ${projSummaries}
@@ -152,7 +147,7 @@ ${leadSummary}`;
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to get response from Deal Copilot');
+        throw new Error(data.error || 'Failed to get response from Copilot');
       }
 
       const botMsg: ChatMessage = {
@@ -164,7 +159,9 @@ ${leadSummary}`;
       setMessages((prev) => [...prev, botMsg]);
     } catch (err: unknown) {
       const errText =
-        err instanceof Error ? err.message : 'Unable to reach Deal Copilot service.';
+        err instanceof Error
+          ? err.message
+          : 'Unable to reach Copilot service.';
       setMessages((prev) => [
         ...prev,
         {
@@ -181,180 +178,123 @@ ${leadSummary}`;
   const quickPrompts =
     role === 'Admin'
       ? [
-          `Which 3 BHK units are currently Available in ${activeProject.name}?`,
-          'Summarize pending broker commissions and top-performing leads.',
-          `Draft an executive mandate absorption update for ${activeProject.name}.`,
+          `Available 3 BHK units in ${activeProject.name}`,
+          'Pending broker commissions summary',
+          `Absorption status for ${activeProject.name}`,
         ]
       : [
-          `Recommend the best available unit in ${activeProject.name} for Siddharth Kapoor.`,
-          'Draft a WhatsApp cost-sheet pitch with GST & stamp duty for a 3 BHK.',
-          'What is my total pending and approved brokerage payout?',
+          `Best unit in ${activeProject.name} for Siddharth Kapoor`,
+          'Cost sheet breakdown with GST & stamp duty for a 3 BHK',
+          'My pending and approved brokerage payouts',
         ];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/35 transition-opacity"
+        className="fixed inset-0 bg-black/30"
         onClick={() => setCopilotOpen(false)}
       />
 
-      {/* Slide-Over Panel */}
-      <aside className="relative z-10 w-full max-w-lg bg-white h-full border-l border-slate-200 shadow-2xl flex flex-col justify-between">
-        {/* Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white border-b border-slate-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold">soleX Deal & Mandate Copilot</h2>
-                <div className="text-xs text-slate-400">
-                  Role Context:{' '}
-                  <span className="text-indigo-300 font-medium">
-                    {role === 'Admin'
-                      ? 'Mandate HQ Admin'
-                      : `Broker · ${activeBroker?.name}`}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  setMessages([
-                    {
-                      id: `welcome-${Date.now()}`,
-                      role: 'model',
-                      text: 'Conversation reset. Ready with your latest live inventory and lead pipeline state.',
-                      modelUsed: selectedModel,
-                    },
-                  ])
-                }
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                title="Reset conversation"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setCopilotOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                aria-label="Close Copilot"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <aside
+        role="dialog"
+        aria-label="Copilot"
+        className="drawer-enter relative z-10 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between"
+      >
+        {/* Ivory Header Strip */}
+        <div
+          className="px-5 py-3.5 border-b flex items-center justify-between gap-2"
+          style={{
+            backgroundColor: 'var(--ivory-band)',
+            borderColor: 'var(--ivory-band-border)',
+          }}
+        >
+          <div>
+            <h2 className="t-16 text-[var(--text-primary)]">Copilot</h2>
+            <div className="t-12 text-[var(--text-secondary)]">
+              {role === 'Admin'
+                ? 'Mandate HQ scope'
+                : `${activeBroker?.firmName} scope`}
             </div>
           </div>
 
-          {/* Model Tier Selector */}
-          <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
-              Reasoning Engine:
-            </span>
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-              <button
-                type="button"
-                onClick={() => setSelectedModel('gemini-3.1-flash-lite')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                  selectedModel === 'gemini-3.1-flash-lite'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Fast lookup (gemini-3.1-flash-lite)"
-              >
-                <Zap className="w-3 h-3" />
-                <span>Fast Lite</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedModel('gemini-3.8-flash')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                  selectedModel === 'gemini-3.8-flash'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="General tasks (gemini-3.8-flash)"
-              >
-                <Cpu className="w-3 h-3" />
-                <span>3.8 Flash</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedModel('gemini-4-argon')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                  selectedModel === 'gemini-4-argon'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Complex deal & mandate reasoning (gemini-4-argon)"
-              >
-                <BrainCircuit className="w-3 h-3" />
-                <span>4 Argon</span>
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value as ModelTier)}
+              aria-label="Select model"
+              className="input-control h-7 py-0 px-2 t-12 t-mono w-auto"
+            >
+              <option value="gemini-3.1-flash-lite">3.1-flash-lite</option>
+              <option value="gemini-3.8-flash">3.8-flash</option>
+              <option value="gemini-4-argon">4-argon</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() =>
+                setMessages([
+                  {
+                    id: `welcome-${Date.now()}`,
+                    role: 'model',
+                    text: 'Conversation reset.',
+                    modelUsed: selectedModel,
+                  },
+                ])
+              }
+              className="btn-ghost btn-sm px-2"
+              title="Reset conversation"
+              aria-label="Reset conversation"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCopilotOpen(false)}
+              className="btn-ghost btn-sm px-2"
+              aria-label="Close Copilot"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Scrollable Conversation Thread */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50">
+        {/* Thread */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex items-start gap-3 ${
-                msg.role === 'user' ? 'flex-row-reverse' : ''
+              className={`flex flex-col ${
+                msg.role === 'user' ? 'items-end' : 'items-start'
               }`}
             >
               <div
-                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                className={`max-w-[88%] rounded-[6px] px-3.5 py-2.5 t-13 ${
                   msg.role === 'user'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-indigo-600 text-white'
-                }`}
-              >
-                {msg.role === 'user' ? (
-                  <User className="w-3.5 h-3.5" />
-                ) : (
-                  <Bot className="w-3.5 h-3.5" />
-                )}
-              </div>
-
-              <div
-                className={`max-w-[82%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-800 border border-slate-200 shadow-2xs'
+                    ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
+                    : 'bg-[var(--subtle)] text-[var(--text-primary)] border border-[var(--border)]'
                 }`}
               >
                 <div className="whitespace-pre-wrap">{msg.text}</div>
-                {msg.modelUsed && msg.role === 'model' && (
-                  <div className="mt-2 pt-1.5 border-t border-slate-100 text-[10px] font-mono text-slate-400">
-                    Model: {msg.modelUsed}
-                  </div>
-                )}
               </div>
+              {msg.modelUsed && msg.role === 'model' && (
+                <span className="t-12 t-mono text-[var(--text-tertiary)] mt-1">
+                  {msg.modelUsed}
+                </span>
+              )}
             </div>
           ))}
 
           {isLoading && (
-            <div className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                <Bot className="w-3.5 h-3.5" />
-              </div>
-              <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-500">
-                Analyzing live mandate state with {selectedModel}...
-              </div>
+            <div className="t-12 text-[var(--text-tertiary)] t-mono">
+              Querying {selectedModel}...
             </div>
           )}
 
           <div ref={threadEndRef} />
         </div>
 
-        {/* Quick Prompts + Input Bar */}
-        <div className="p-4 bg-white border-t border-slate-200 space-y-3">
+        {/* Footer Input */}
+        <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] space-y-2.5">
           <div className="flex flex-wrap gap-1.5">
             {quickPrompts.map((qp, idx) => (
               <button
@@ -362,7 +302,7 @@ ${leadSummary}`;
                 type="button"
                 onClick={() => sendPrompt(qp)}
                 disabled={isLoading}
-                className="text-left text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 transition-colors cursor-pointer"
+                className="btn-secondary btn-sm t-12"
               >
                 {qp}
               </button>
@@ -372,7 +312,7 @@ ${leadSummary}`;
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              sendPrompt(input);
+              void sendPrompt(input);
             }}
             className="flex items-center gap-2"
           >
@@ -380,15 +320,15 @@ ${leadSummary}`;
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about available units, cost sheets, or broker commissions..."
-              className="flex-1 px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              placeholder="Ask about inventory, cost sheets, or payouts..."
+              className="input-control flex-1"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="btn-primary"
             >
-              <Send className="w-4 h-4" />
+              Send
             </button>
           </form>
         </div>

@@ -1,20 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import {
   useSolexStore,
-  formatInrCompact,
+  BookingRecord,
 } from '../store/useSolexStore';
-import { LeadPipelineView } from './LeadPipelineView';
 import {
-  Wallet,
-  CheckCircle2,
-  Clock,
-  Users,
-  Award,
-  FileCode2,
-  ShieldCheck,
-  ArrowUpRight,
-  Download,
-} from 'lucide-react';
+  formatInr,
+  formatInrFull,
+  formatPct,
+  formatShortDate,
+  CommissionStatusBadge,
+  SectionTitle,
+  ProjectChip,
+} from '../lib/formatters';
+import { LeadPipelineView } from './LeadPipelineView';
+import { Download, X, ArrowRight } from 'lucide-react';
 
 export const BrokerCommissionsView: React.FC = () => {
   const {
@@ -27,6 +26,10 @@ export const BrokerCommissionsView: React.FC = () => {
     leads,
     advanceCommissionStatus,
   } = useSolexStore();
+
+  const [confirmBooking, setConfirmBooking] = useState<BookingRecord | null>(
+    null
+  );
 
   const activeBroker =
     brokers.find((b) => b.id === activeBrokerId) || brokers[0];
@@ -47,6 +50,18 @@ export const BrokerCommissionsView: React.FC = () => {
   const releasedInr = visibleBookings
     .filter((b) => b.commissionStatus === 'Released')
     .reduce((sum, b) => sum + b.commissionAmountInr, 0);
+
+  // Totals row calculations
+  const totalAgreementValueInr = visibleBookings.reduce(
+    (sum, b) => sum + b.agreementValueInr,
+    0
+  );
+  const totalBrokerageInr = visibleBookings.reduce(
+    (sum, b) => sum + b.commissionAmountInr,
+    0
+  );
+  const totalTdsInr = Math.round(totalBrokerageInr * 0.05);
+  const totalNetPayableInr = totalBrokerageInr - totalTdsInr;
 
   const escapeCsvCell = (value: string | number) => {
     const str = String(value ?? '');
@@ -69,7 +84,9 @@ export const BrokerCommissionsView: React.FC = () => {
       'RERA ID',
       'Agreement Value (INR)',
       'Commission Share (%)',
-      'Commission Amount (INR)',
+      'Brokerage (INR)',
+      'TDS 194H 5% (INR)',
+      'Net Payable (INR)',
       'Payout Status',
     ];
 
@@ -78,6 +95,8 @@ export const BrokerCommissionsView: React.FC = () => {
       const unit = units.find((u) => u.id === bkg.unitId);
       const lead = leads.find((l) => l.id === bkg.leadId);
       const brk = brokers.find((b) => b.id === bkg.brokerId);
+      const tds = Math.round(bkg.commissionAmountInr * 0.05);
+      const net = bkg.commissionAmountInr - tds;
 
       return [
         bkg.id,
@@ -92,20 +111,13 @@ export const BrokerCommissionsView: React.FC = () => {
         bkg.agreementValueInr,
         `${bkg.commissionPct}%`,
         bkg.commissionAmountInr,
+        tds,
+        net,
         bkg.commissionStatus,
       ];
     });
 
-    const summaryRows: (string | number)[][] = [
-      [],
-      ['COMMISSION SUMMARY METRICS'],
-      ['Pending Mandate Audit (INR)', pendingInr],
-      ['Approved for Disbursement (INR)', approvedInr],
-      ['Released & Settled Payouts (INR)', releasedInr],
-    ];
-
-    const allRows = [header, ...dataRows, ...summaryRows];
-    const csvContent = allRows
+    const csvContent = [header, ...dataRows]
       .map((row) => row.map(escapeCsvCell).join(','))
       .join('\n');
 
@@ -126,170 +138,205 @@ export const BrokerCommissionsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="t-22-title text-[var(--text-primary)]">Payouts</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-0.5">
             {role === 'Broker'
-              ? `My Commissions — ${activeBroker.name} (${activeBroker.firmName})`
-              : 'Mandate Finance & Commission Payout Ledger'}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            {role === 'Broker'
-              ? `RERA Registration: ${activeBroker.reraId} · ${activeBroker.tier} Tier Channel Partner`
-              : 'Verify booking allotments, approve channel partner invoices, and release brokerage tranches.'}
+              ? `Brokerage ledger for ${activeBroker.firmName} (${activeBroker.reraId}).`
+              : 'Channel partner commission invoices, Section 194H TDS deductions, and disbursement tranches.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={handleExportCommissionsCsv}
-            className="w-full sm:w-auto justify-center px-3.5 py-2.5 sm:py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            className="btn-secondary"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-            <span>Export CSV</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export to CSV</span>
           </button>
         </div>
       </div>
 
-      {/* 3 Financial KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Pending Mandate Audit</span>
-            <Clock className="w-4 h-4 text-amber-600" />
+      {/* Three Summary Panels: Pending audit = warning label, Approved = Eclipse label, Settled = neutral */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 border border-[var(--border)] rounded-[10px] bg-[var(--surface)] divide-y sm:divide-y-0 sm:divide-x divide-[var(--border)] overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-hold-tint)',
+                color: 'var(--status-hold)',
+              }}
+            >
+              Pending audit
+            </span>
           </div>
-          <div className="text-3xl font-bold text-slate-900 font-mono tabular-nums mt-3">
-            {formatInrCompact(pendingInr)}
+          <div
+            className="t-28 text-[var(--money-total)] mt-2"
+            title={formatInrFull(pendingInr)}
+          >
+            {formatInr(pendingInr)}
           </div>
-          <div className="text-xs text-slate-500 mt-2">
-            Awaiting 10% buyer payment realization & invoice verification
-          </div>
-        </div>
-
-        <div className="p-5 bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Approved for Disbursement</span>
-            <Wallet className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="text-3xl font-bold text-indigo-600 font-mono tabular-nums mt-3">
-            {formatInrCompact(approvedInr)}
-          </div>
-          <div className="text-xs text-slate-500 mt-2">
-            Cleared by soleX Mandate Finance · Scheduled for NEFT/RTGS run
+          <div className="t-12 text-[var(--text-tertiary)] mt-1">
+            Awaiting 10% buyer realization & invoice verification
           </div>
         </div>
 
-        <div className="p-5 bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Released & Settled Payouts</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-booked-tint)',
+                color: 'var(--status-booked)',
+              }}
+            >
+              Approved for disbursement
+            </span>
           </div>
-          <div className="text-3xl font-bold text-emerald-600 font-mono tabular-nums mt-3">
-            {formatInrCompact(releasedInr)}
+          <div
+            className="t-28 text-[var(--money-total)] mt-2"
+            title={formatInrFull(approvedInr)}
+          >
+            {formatInr(approvedInr)}
           </div>
-          <div className="text-xs text-slate-500 mt-2">
-            Settled net of 5% TDS under Section 194H
+          <div className="t-12 text-[var(--text-tertiary)] mt-1">
+            Cleared by mandate finance · Ready for NEFT/RTGS release
+          </div>
+        </div>
+
+        <div className="p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-sold-tint)',
+                color: 'var(--status-sold)',
+              }}
+            >
+              Settled
+            </span>
+          </div>
+          <div
+            className="t-28 text-[var(--text-primary)] mt-2"
+            title={formatInrFull(releasedInr)}
+          >
+            {formatInr(releasedInr)}
+          </div>
+          <div className="t-12 text-[var(--text-tertiary)] mt-1">
+            Disbursed net of 5.0% TDS under Section 194H
           </div>
         </div>
       </div>
 
-      {/* Commission Ledger Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900">
-            Booking-Linked Commission Tranches ({visibleBookings.length})
-          </h2>
-          <span className="text-xs text-slate-500">
-            Every new booking automatically creates a ledger row here
-          </span>
-        </div>
-
+      {/* Ledger Table */}
+      <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/60 text-xs font-semibold text-slate-500">
-                <th className="py-3 px-4">Project & Unit</th>
-                <th className="py-3 px-4">Allotted Buyer</th>
-                <th className="py-3 px-4">Channel Partner</th>
-                <th className="py-3 px-4 text-right">Agreement Value</th>
-                <th className="py-3 px-4 text-right">Brokerage (₹)</th>
-                <th className="py-3 px-4">Payout Status</th>
-                {role === 'Admin' && (
-                  <th className="py-3 px-4 text-right">Finance Action</th>
-                )}
+            <thead className="bg-[var(--subtle)] border-b border-[var(--border)]">
+              <tr className="h-9 text-[12px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                <th className="px-4">Project / Unit</th>
+                <th className="px-4">Buyer</th>
+                <th className="px-4">Channel partner</th>
+                <th className="px-4 text-right">Agreement value</th>
+                <th className="px-4 text-right">Brokerage %</th>
+                <th className="px-4 text-right">Brokerage ₹</th>
+                <th className="px-4 text-right">TDS (194H)</th>
+                <th className="px-4 text-right">Net payable</th>
+                <th className="px-4">Status</th>
+                {role === 'Admin' && <th className="px-4 text-right">Action</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-sm">
+            <tbody className="divide-y divide-[var(--border)] t-13">
               {visibleBookings.map((bkg) => {
                 const proj = projects.find((p) => p.id === bkg.projectId);
                 const unit = units.find((u) => u.id === bkg.unitId);
                 const lead = leads.find((l) => l.id === bkg.leadId);
                 const brk = brokers.find((b) => b.id === bkg.brokerId);
+                const tdsInr = Math.round(bkg.commissionAmountInr * 0.05);
+                const netInr = bkg.commissionAmountInr - tdsInr;
 
                 return (
                   <tr
                     key={bkg.id}
-                    className="hover:bg-slate-50/70 transition-colors"
+                    className="h-11 hover:bg-[var(--subtle)] transition-colors"
                   >
-                    <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-900">
-                        {proj?.name}
-                      </div>
-                      <div className="text-xs font-mono text-slate-500">
-                        Unit {unit?.unitNumber} · {unit?.bhk}
+                    <td className="px-4">
+                      <div className="flex items-center gap-2">
+                        {proj && (
+                          <ProjectChip projectId={proj.id} name={proj.name} />
+                        )}
+                        <span className="text-[var(--text-primary)] t-mono font-medium">
+                          Unit {unit?.unitNumber}
+                        </span>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-xs font-medium text-slate-800">
-                      {lead?.buyerName || 'Allotted Buyer'}
+                    <td className="px-4 text-[var(--text-secondary)]">
+                      {lead?.buyerName || 'Allotted buyer'}
                     </td>
-                    <td className="py-3.5 px-4">
-                      <div className="text-xs font-semibold text-slate-900">
+                    <td className="px-4">
+                      <span className="text-[var(--text-primary)]">
                         {brk?.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {brk?.firmName}
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-800">
-                      {formatInrCompact(bkg.agreementValueInr)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="font-mono font-bold text-indigo-600">
-                        {formatInrCompact(bkg.commissionAmountInr)}
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-400">
-                        {bkg.commissionPct}% Mandate Share
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`text-xs font-semibold ${
-                          bkg.commissionStatus === 'Released'
-                            ? 'text-emerald-700'
-                            : bkg.commissionStatus === 'Approved'
-                            ? 'text-indigo-700'
-                            : 'text-amber-700'
-                        }`}
-                      >
-                        {bkg.commissionStatus}
+                      </span>
+                      <span className="text-[var(--text-tertiary)]">
+                        {' '}
+                        · {brk?.firmName}
                       </span>
                     </td>
+                    <td
+                      className="px-4 text-right t-mono text-[var(--text-primary)]"
+                      title={formatInrFull(bkg.agreementValueInr)}
+                    >
+                      {formatInr(bkg.agreementValueInr)}
+                    </td>
+                    <td className="px-4 text-right t-mono text-[var(--text-secondary)]">
+                      {formatPct(bkg.commissionPct)}
+                    </td>
+                    <td
+                      className="px-4 text-right t-mono text-[var(--text-primary)]"
+                      title={formatInrFull(bkg.commissionAmountInr)}
+                    >
+                      {formatInr(bkg.commissionAmountInr)}
+                    </td>
+                    <td
+                      className="px-4 text-right t-mono text-[var(--text-secondary)]"
+                      title={formatInrFull(tdsInr)}
+                    >
+                      {formatInr(tdsInr)}
+                    </td>
+                    <td
+                      className="px-4 text-right t-mono font-medium text-[var(--text-primary)]"
+                      title={formatInrFull(netInr)}
+                    >
+                      {formatInr(netInr)}
+                    </td>
+                    <td className="px-4">
+                      <CommissionStatusBadge status={bkg.commissionStatus} />
+                    </td>
                     {role === 'Admin' && (
-                      <td className="py-3.5 px-4 text-right">
-                        {bkg.commissionStatus !== 'Released' ? (
+                      <td className="px-4 text-right">
+                        {bkg.commissionStatus === 'Pending Approval' ? (
                           <button
                             type="button"
-                            onClick={() => advanceCommissionStatus(bkg.id)}
-                            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                            onClick={() => setConfirmBooking(bkg)}
+                            className="btn-secondary btn-sm"
                           >
-                            {bkg.commissionStatus === 'Pending Approval'
-                              ? 'Approve Invoice'
-                              : 'Release Payout'}
+                            Approve invoice
+                          </button>
+                        ) : bkg.commissionStatus === 'Approved' ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmBooking(bkg)}
+                            className="btn-accent btn-sm"
+                          >
+                            Release payout
                           </button>
                         ) : (
-                          <span className="text-xs text-slate-400 font-mono">
+                          <span className="t-12 t-mono text-[var(--text-tertiary)]">
                             Settled
                           </span>
                         )}
@@ -299,9 +346,137 @@ export const BrokerCommissionsView: React.FC = () => {
                 );
               })}
             </tbody>
+            {/* Totals row in Eclipse 800 mono */}
+            <tfoot className="bg-[var(--subtle)] border-t border-[var(--border)] t-13 font-semibold">
+              <tr className="h-11">
+                <td colSpan={3} className="px-4 text-[var(--text-primary)]">
+                  Total ({visibleBookings.length} tranches)
+                </td>
+                <td
+                  className="px-4 text-right t-mono text-[var(--money-total)]"
+                  title={formatInrFull(totalAgreementValueInr)}
+                >
+                  {formatInr(totalAgreementValueInr)}
+                </td>
+                <td className="px-4 text-right t-mono text-[var(--text-tertiary)]">
+                  —
+                </td>
+                <td
+                  className="px-4 text-right t-mono text-[var(--money-total)]"
+                  title={formatInrFull(totalBrokerageInr)}
+                >
+                  {formatInr(totalBrokerageInr)}
+                </td>
+                <td
+                  className="px-4 text-right t-mono text-[var(--money-total)]"
+                  title={formatInrFull(totalTdsInr)}
+                >
+                  {formatInr(totalTdsInr)}
+                </td>
+                <td
+                  className="px-4 text-right t-mono text-[var(--money-total)]"
+                  title={formatInrFull(totalNetPayableInr)}
+                >
+                  {formatInr(totalNetPayableInr)}
+                </td>
+                <td colSpan={role === 'Admin' ? 2 : 1} className="px-4" />
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
+
+      {/* Confirmation Dialog for Approve Invoice / Release Payout */}
+      {confirmBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/40"
+            onClick={() => setConfirmBooking(null)}
+          />
+          <div
+            role="dialog"
+            aria-label="Confirm finance action"
+            className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse p-5 space-y-4"
+          >
+            {(() => {
+              const brk = brokers.find((b) => b.id === confirmBooking.brokerId);
+              const unit = units.find((u) => u.id === confirmBooking.unitId);
+              const proj = projects.find(
+                (p) => p.id === confirmBooking.projectId
+              );
+              const tds = Math.round(confirmBooking.commissionAmountInr * 0.05);
+              const net = confirmBooking.commissionAmountInr - tds;
+              const isApproving =
+                confirmBooking.commissionStatus === 'Pending Approval';
+
+              return (
+                <>
+                  <div>
+                    <h2 className="t-16 text-[var(--text-primary)]">
+                      {isApproving
+                        ? `Approve ${formatInr(
+                            confirmBooking.commissionAmountInr
+                          )} invoice for ${brk?.name}?`
+                        : `Release ${formatInr(net)} to ${brk?.name}?`}
+                    </h2>
+                    <p className="t-13 text-[var(--text-secondary)] mt-1">
+                      {proj?.name} · Unit {unit?.unitNumber} · {brk?.firmName} (
+                      <span className="t-mono">{brk?.reraId}</span>)
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-[6px] bg-[var(--subtle)] border border-[var(--border)] space-y-1.5 t-13">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--text-secondary)]">
+                        Gross brokerage ({confirmBooking.commissionPct}%)
+                      </span>
+                      <span className="t-mono text-[var(--text-primary)]">
+                        {formatInrFull(confirmBooking.commissionAmountInr)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--text-secondary)]">
+                        Less TDS under Sec 194H (5.0%)
+                      </span>
+                      <span className="t-mono text-[var(--status-blocked)]">
+                        -{formatInrFull(tds)}
+                      </span>
+                    </div>
+                    <div className="pt-1.5 border-t border-[var(--border)] flex items-center justify-between font-semibold">
+                      <span className="text-[var(--text-primary)]">
+                        Net disbursement
+                      </span>
+                      <span className="t-mono text-[var(--money-total)]">
+                        {formatInrFull(net)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmBooking(null)}
+                      className="btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        advanceCommissionStatus(confirmBooking.id);
+                        setConfirmBooking(null);
+                      }}
+                      className={isApproving ? 'btn-primary' : 'btn-accent'}
+                    >
+                      {isApproving ? 'Approve invoice' : 'Release payout'}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -311,99 +486,337 @@ export const AdminBrokersDirectoryView: React.FC = () => {
     brokers,
     leads,
     bookings,
+    projects,
+    units,
     setRole,
     setActiveBrokerId,
   } = useSolexStore();
 
+  const [selectedBrokerDrawerId, setSelectedBrokerDrawerId] = useState<
+    string | null
+  >(null);
+
+  const inspectedBroker = selectedBrokerDrawerId
+    ? brokers.find((b) => b.id === selectedBrokerDrawerId)
+    : null;
+
+  // Determine top performer commission threshold for subtle ivory row tint
+  const brokerCommissions = brokers.map((brk) =>
+    bookings
+      .filter((b) => b.brokerId === brk.id)
+      .reduce((sum, b) => sum + b.commissionAmountInr, 0)
+  );
+  const maxCommission = Math.max(...brokerCommissions, 0);
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Empanelled Channel Partners (Brokers)
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            RERA-verified brokerage firms actively marketing soleX mandated developments. Click &ldquo;Impersonate Broker Portal&rdquo; to preview their isolated RBAC view.
+          <h1 className="t-22-title text-[var(--text-primary)]">Brokers</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-0.5">
+            RERA-empanelled channel partners, conversion performance, and commission attribution.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {brokers.map((brk) => {
-          const brokerLeads = leads.filter((l) => l.assignedBrokerId === brk.id);
-          const brokerBookings = bookings.filter((b) => b.brokerId === brk.id);
-          const totalSalesInr = brokerBookings.reduce(
-            (sum, b) => sum + b.agreementValueInr,
-            0
-          );
-          const pendingCommInr = brokerBookings
-            .filter((b) => b.commissionStatus !== 'Released')
-            .reduce((sum, b) => sum + b.commissionAmountInr, 0);
+      {/* Brokers Table */}
+      <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[var(--subtle)] border-b border-[var(--border)]">
+              <tr className="h-9 text-[12px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                <th className="px-4">Firm</th>
+                <th className="px-4">RERA agent ID</th>
+                <th className="px-4 text-right">Active leads</th>
+                <th className="px-4 text-right">Site visits</th>
+                <th className="px-4 text-right">Bookings</th>
+                <th className="px-4 text-right">Conversion %</th>
+                <th className="px-4 text-right">Commission earned (₹)</th>
+                <th className="px-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)] t-13">
+              {brokers.map((brk) => {
+                const brokerLeads = leads.filter(
+                  (l) => l.assignedBrokerId === brk.id
+                );
+                const activeLeadsCount = brokerLeads.filter(
+                  (l) => l.stage !== 'Booked'
+                ).length;
+                const siteVisitsCount = brokerLeads.filter(
+                  (l) =>
+                    l.stage === 'Site Visit' ||
+                    l.stage === 'Negotiation' ||
+                    l.stage === 'Booked'
+                ).length;
+                const brokerBookings = bookings.filter(
+                  (b) => b.brokerId === brk.id
+                );
+                const conversionPct =
+                  brokerLeads.length > 0
+                    ? (brokerBookings.length / brokerLeads.length) * 100
+                    : 0;
+                const totalCommissionInr = brokerBookings.reduce(
+                  (sum, b) => sum + b.commissionAmountInr,
+                  0
+                );
+                const isTopPerformer =
+                  maxCommission > 0 && totalCommissionInr === maxCommission;
 
-          return (
-            <div
-              key={brk.id}
-              className="p-6 bg-white rounded-xl border border-slate-200 flex flex-col justify-between gap-4"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Award className="w-3.5 h-3.5 text-indigo-600" />
-                      <span className="font-semibold text-indigo-600">
-                        {brk.tier} Channel Partner
+                return (
+                  <tr
+                    key={brk.id}
+                    onClick={() => setSelectedBrokerDrawerId(brk.id)}
+                    style={{
+                      backgroundColor: isTopPerformer
+                        ? 'var(--ivory-band)'
+                        : undefined,
+                    }}
+                    className="h-11 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+                  >
+                    <td className="px-4">
+                      <span className="font-medium text-[var(--text-primary)]">
+                        {brk.firmName}
                       </span>
-                      <span>·</span>
-                      <span>{brk.city}</span>
-                    </div>
-                    <h2 className="text-lg font-bold text-slate-900 mt-1">
-                      {brk.name} — {brk.firmName}
-                    </h2>
-                    <div className="text-xs font-mono text-slate-500 mt-0.5">
-                      RERA ID: {brk.reraId} · {brk.phone}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-100">
-                  <div>
-                    <div className="text-xs text-slate-500">Registered Leads</div>
-                    <div className="text-lg font-bold text-slate-900 font-mono mt-0.5">
-                      {brokerLeads.length}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Gross Bookings</div>
-                    <div className="text-lg font-bold text-slate-900 font-mono mt-0.5">
-                      {formatInrCompact(totalSalesInr)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Pending Payout</div>
-                    <div className="text-lg font-bold text-indigo-600 font-mono mt-0.5">
-                      {formatInrCompact(pendingCommInr)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveBrokerId(brk.id);
-                    setRole('Broker');
-                  }}
-                  className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <span>Open Broker Portal as {brk.name}</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
+                      <span className="text-[var(--text-secondary)]">
+                        {' '}
+                        · {brk.name}
+                      </span>
+                    </td>
+                    <td className="px-4 t-mono text-[var(--text-secondary)]">
+                      {brk.reraId}
+                    </td>
+                    <td className="px-4 text-right t-mono text-[var(--text-primary)]">
+                      {activeLeadsCount}
+                    </td>
+                    <td className="px-4 text-right t-mono text-[var(--text-primary)]">
+                      {siteVisitsCount}
+                    </td>
+                    <td className="px-4 text-right t-mono text-[var(--text-primary)]">
+                      {brokerBookings.length}
+                    </td>
+                    <td className="px-4 text-right">
+                      <div className="inline-flex items-center justify-end gap-2 w-28">
+                        <div className="w-12 h-1.5 bg-[var(--bg)] rounded-full overflow-hidden">
+                          <div
+                            className="h-full"
+                            style={{
+                              width: `${Math.min(100, Math.round(conversionPct))}%`,
+                              backgroundColor: '#272757',
+                            }}
+                          />
+                        </div>
+                        <span className="t-mono text-[var(--text-primary)]">
+                          {formatPct(conversionPct)}
+                        </span>
+                      </div>
+                    </td>
+                    <td
+                      className="px-4 text-right t-mono font-medium text-[var(--money-total)]"
+                      title={formatInrFull(totalCommissionInr)}
+                    >
+                      {formatInr(totalCommissionInr)}
+                    </td>
+                    <td className="px-4">
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[6px] t-12"
+                        style={{
+                          backgroundColor: 'var(--status-available-tint)',
+                          color: 'var(--status-available)',
+                        }}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: 'var(--status-available)',
+                          }}
+                        />
+                        <span>Active</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Broker Detail Drawer (480px Right) */}
+      {inspectedBroker && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/30"
+            onClick={() => setSelectedBrokerDrawerId(null)}
+          />
+          <aside
+            role="dialog"
+            aria-label={inspectedBroker.firmName}
+            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+          >
+            {(() => {
+              const brokerLeads = leads.filter(
+                (l) => l.assignedBrokerId === inspectedBroker.id
+              );
+              const brokerBookings = bookings.filter(
+                (b) => b.brokerId === inspectedBroker.id
+              );
+              const totalSalesInr = brokerBookings.reduce(
+                (sum, b) => sum + b.agreementValueInr,
+                0
+              );
+              const totalCommInr = brokerBookings.reduce(
+                (sum, b) => sum + b.commissionAmountInr,
+                0
+              );
+
+              return (
+                <>
+                  <div className="divide-y divide-[var(--border)]">
+                    <div
+                      className="p-5 flex items-start justify-between gap-4 border-b"
+                      style={{
+                        backgroundColor: 'var(--ivory-band)',
+                        borderColor: 'var(--ivory-band-border)',
+                      }}
+                    >
+                      <div>
+                        <div className="t-12 t-mono text-[var(--text-secondary)]">
+                          {inspectedBroker.reraId} · {inspectedBroker.city}
+                        </div>
+                        <h2 className="t-22-title text-[var(--text-primary)] mt-1">
+                          {inspectedBroker.firmName}
+                        </h2>
+                        <div className="t-13 text-[var(--text-secondary)] mt-0.5">
+                          Principal partner: {inspectedBroker.name} ·{' '}
+                          <span className="t-mono">{inspectedBroker.phone}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBrokerDrawerId(null)}
+                        className="btn-ghost btn-sm px-2"
+                        aria-label="Close broker drawer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Performance Summary */}
+                    <div className="p-5 grid grid-cols-3 gap-4">
+                      <div>
+                        <div className="t-12 text-[var(--text-tertiary)]">
+                          Leads
+                        </div>
+                        <div className="t-16 t-mono text-[var(--text-primary)] mt-0.5">
+                          {brokerLeads.length}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="t-12 text-[var(--text-tertiary)]">
+                          Gross sales
+                        </div>
+                        <div
+                          className="t-16 t-mono text-[var(--text-primary)] mt-0.5"
+                          title={formatInrFull(totalSalesInr)}
+                        >
+                          {formatInr(totalSalesInr)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="t-12 text-[var(--text-tertiary)]">
+                          Commission
+                        </div>
+                        <div
+                          className="t-16 t-mono text-[var(--money-total)] mt-0.5"
+                          title={formatInrFull(totalCommInr)}
+                        >
+                          {formatInr(totalCommInr)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Deals */}
+                    <div className="p-5">
+                      <div className="mb-3">
+                        <SectionTitle>
+                          Recent deals ({brokerBookings.length})
+                        </SectionTitle>
+                      </div>
+                      {brokerBookings.length === 0 ? (
+                        <div className="t-13 text-[var(--text-tertiary)]">
+                          No confirmed bookings recorded yet.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-[var(--border)]">
+                          {brokerBookings.map((bkg) => {
+                            const proj = projects.find(
+                              (p) => p.id === bkg.projectId
+                            );
+                            const unit = units.find((u) => u.id === bkg.unitId);
+                            const lead = leads.find((l) => l.id === bkg.leadId);
+                            return (
+                              <div
+                                key={bkg.id}
+                                className="py-2.5 flex items-center justify-between gap-3 t-13"
+                              >
+                                <div>
+                                  <div className="font-medium text-[var(--text-primary)]">
+                                    {proj?.name} ·{' '}
+                                    <span className="t-mono">
+                                      Unit {unit?.unitNumber}
+                                    </span>
+                                  </div>
+                                  <div className="t-12 text-[var(--text-secondary)]">
+                                    {lead?.buyerName} ·{' '}
+                                    <span className="t-mono">
+                                      {formatShortDate(bkg.bookedAt)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="t-mono text-[var(--text-primary)]">
+                                    {formatInr(bkg.commissionAmountInr)}
+                                  </div>
+                                  <CommissionStatusBadge
+                                    status={bkg.commissionStatus}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBrokerDrawerId(null)}
+                      className="btn-secondary"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveBrokerId(inspectedBroker.id);
+                        setSelectedBrokerDrawerId(null);
+                        setRole('Broker');
+                      }}
+                      className="btn-primary"
+                    >
+                      View as {inspectedBroker.name}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </aside>
+        </div>
+      )}
     </div>
   );
 };
@@ -423,28 +836,16 @@ export const ArchitectureBlueprintView: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-indigo-600 font-semibold">
-            <ShieldCheck className="w-4 h-4" />
-            <span>Mandatory Deliverable · /ARCHITECTURE.md</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
-            Production Architecture & Relational Schema Blueprint
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Live rendering of `/ARCHITECTURE.md` detailing Next.js + Supabase RBAC, PostgreSQL DDL, pessimistic locking (`SELECT ... FOR UPDATE NOWAIT`), and cloud security.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="t-22-title text-[var(--text-primary)]">Architecture</h1>
+        <p className="t-13 text-[var(--text-secondary)] mt-0.5">
+          Developer reference for `/ARCHITECTURE.md` and Supabase schema.
+        </p>
       </div>
 
-      <div className="bg-slate-900 text-slate-100 rounded-xl border border-slate-800 p-6 overflow-x-auto">
-        <div className="flex items-center gap-2 pb-4 mb-4 border-b border-slate-800 text-xs text-slate-400 font-mono">
-          <FileCode2 className="w-4 h-4 text-indigo-400" />
-          <span>/ARCHITECTURE.md</span>
-        </div>
-        <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap text-slate-200">
+      <div className="p-4 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] overflow-x-auto">
+        <pre className="t-12 t-mono leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
           {markdown}
         </pre>
       </div>
@@ -452,63 +853,157 @@ export const ArchitectureBlueprintView: React.FC = () => {
   );
 };
 
-export const BrokerPortalView: React.FC<{ subScreen: 'leads' | 'commissions' }> = ({
-  subScreen,
-}) => {
-  const { activeBrokerId, setActiveBrokerId, brokers, leads, bookings } =
-    useSolexStore();
+export const BrokerPortalView: React.FC<{
+  subScreen: 'overview' | 'leads' | 'commissions';
+}> = ({ subScreen }) => {
+  const {
+    activeBrokerId,
+    brokers,
+    leads,
+    bookings,
+    units,
+    setActiveScreen,
+  } = useSolexStore();
 
   const activeBroker =
     brokers.find((b) => b.id === activeBrokerId) || brokers[0];
   const myLeads = leads.filter((l) => l.assignedBrokerId === activeBroker.id);
+  const myActiveLeads = myLeads.filter((l) => l.stage !== 'Booked');
+  const myHolds = units.filter(
+    (u) =>
+      u.status === 'Hold' &&
+      myLeads.some((l) => l.id === u.heldByLeadId)
+  );
   const myBookings = bookings.filter((b) => b.brokerId === activeBroker.id);
-  const myPendingInr = myBookings
-    .filter((b) => b.commissionStatus !== 'Released')
+
+  const pendingComm = myBookings
+    .filter((b) => b.commissionStatus === 'Pending Approval')
     .reduce((sum, b) => sum + b.commissionAmountInr, 0);
+  const approvedComm = myBookings
+    .filter((b) => b.commissionStatus === 'Approved')
+    .reduce((sum, b) => sum + b.commissionAmountInr, 0);
+  const paidComm = myBookings
+    .filter((b) => b.commissionStatus === 'Released')
+    .reduce((sum, b) => sum + b.commissionAmountInr, 0);
+  const availableUnitsCount = units.filter(
+    (u) => u.status === 'Available'
+  ).length;
+
+  if (subScreen === 'leads') {
+    return <LeadPipelineView />;
+  }
+  if (subScreen === 'commissions') {
+    return <BrokerCommissionsView />;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Broker Context Banner */}
-      <div className="p-4 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="text-xs text-indigo-300 font-medium">
-              Role-Based Access Demo · Isolated Channel Partner Session
-            </div>
-            <div className="text-sm font-bold">
-              {activeBroker.name} · {activeBroker.firmName} ({activeBroker.reraId})
-            </div>
-          </div>
+      {/* Ink-Wash Overview Header Band */}
+      <div className="ink-wash-band rounded-[10px] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="t-22-title text-[var(--text-primary)]">Overview</h1>
+          <p className="t-13 text-[var(--text-secondary)] mt-0.5">
+            {activeBroker.firmName} · RERA{' '}
+            <span className="t-mono">{activeBroker.reraId}</span>
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-slate-300 hidden md:block">
-            <span className="font-mono font-bold text-white">{myLeads.length}</span> My Leads ·{' '}
-            <span className="font-mono font-bold text-emerald-400">
-              {formatInrCompact(myPendingInr)}
-            </span>{' '}
-            Pending Commission
-          </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('projects')}
+          className="btn-secondary"
+        >
+          <span>Available inventory ({availableUnitsCount})</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
-          <select
-            value={activeBrokerId}
-            onChange={(e) => setActiveBrokerId(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-semibold text-white"
-            aria-label="Switch active broker persona"
+      {/* Needs Action Strip */}
+      <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)] overflow-hidden">
+        <div className="px-4 h-11 flex items-center justify-between t-13">
+          <span className="text-[var(--text-primary)]">
+            My leads needing action
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('broker-leads')}
+            className="t-12 t-mono text-[var(--accent)] hover:underline cursor-pointer"
           >
-            {brokers.map((b) => (
-              <option key={b.id} value={b.id}>
-                Persona: {b.name} ({b.firmName})
-              </option>
-            ))}
-          </select>
+            {myActiveLeads.length} active →
+          </button>
+        </div>
+        <div className="px-4 h-11 flex items-center justify-between t-13">
+          <span className="text-[var(--text-primary)]">Holds expiring</span>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('projects')}
+            className="t-12 t-mono text-[var(--accent)] hover:underline cursor-pointer"
+          >
+            {myHolds.length} on hold →
+          </button>
         </div>
       </div>
 
-      {subScreen === 'leads' ? <LeadPipelineView /> : <BrokerCommissionsView />}
+      {/* My Commissions (Pending / Approved / Paid Tinted Chips) */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5">
+          <SectionTitle>My commissions</SectionTitle>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('broker-commissions')}
+            className="t-12 text-[var(--accent)] hover:underline cursor-pointer"
+          >
+            Open ledger →
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 border border-[var(--border)] rounded-[10px] bg-[var(--surface)] divide-y sm:divide-y-0 sm:divide-x divide-[var(--border)] overflow-hidden">
+          <div className="p-4">
+            <span
+              className="inline-flex px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-hold-tint)',
+                color: 'var(--status-hold)',
+              }}
+            >
+              Pending
+            </span>
+            <div className="t-28 text-[var(--money-total)] mt-2">
+              {formatInr(pendingComm)}
+            </div>
+          </div>
+          <div className="p-4">
+            <span
+              className="inline-flex px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-booked-tint)',
+                color: 'var(--status-booked)',
+              }}
+            >
+              Approved
+            </span>
+            <div className="t-28 text-[var(--money-total)] mt-2">
+              {formatInr(approvedComm)}
+            </div>
+          </div>
+          <div className="p-4">
+            <span
+              className="inline-flex px-2 py-0.5 rounded-[6px] t-12"
+              style={{
+                backgroundColor: 'var(--status-sold-tint)',
+                color: 'var(--status-sold)',
+              }}
+            >
+              Paid
+            </span>
+            <div className="t-28 text-[var(--text-primary)] mt-2">
+              {formatInr(paidComm)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Embedded Lead Pipeline */}
+      <LeadPipelineView />
     </div>
   );
 };

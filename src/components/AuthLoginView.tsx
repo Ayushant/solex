@@ -5,35 +5,19 @@ import {
   type AuthenticatedUser,
 } from '../lib/supabase';
 import { useSolexStore, type UserRole } from '../store/useSolexStore';
-import {
-  ShieldCheck,
-  Lock,
-  Mail,
-  User,
-  Building2,
-  ArrowRight,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  Briefcase,
-  KeyRound,
-} from 'lucide-react';
+import { X } from 'lucide-react';
 
 export const AuthLoginView: React.FC = () => {
   const { loginUser, brokers } = useSolexStore();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('director@solexmandate.in');
-  const [password, setPassword] = useState('SolexMandate@2026');
-  const [fullName, setFullName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('Admin');
-  const [selectedBrokerId, setSelectedBrokerId] = useState<string>('brk-rahul');
-  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [demoDialogOpen, setDemoDialogOpen] = useState(false);
 
-  const handleQuickPersonaLogin = (persona: AuthenticatedUser) => {
+  const handleDemoSelect = (persona: AuthenticatedUser) => {
+    setDemoDialogOpen(false);
     setErrorMessage(null);
     loginUser(persona);
   };
@@ -41,489 +25,270 @@ export const AuthLoginView: React.FC = () => {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setInfoMessage(null);
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password.trim()) {
-      setErrorMessage('Please enter both your email address and password.');
+      setErrorMessage('Enter your email address and password.');
       return;
     }
 
     setLoading(true);
-
     try {
-      // Check if email matches one of the pre-configured soleX enterprise accounts
       const matchedDemo = DEMO_USERS.find(
         (u) => u.email.toLowerCase() === normalizedEmail
       );
 
-      if (mode === 'signin') {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (!error && data.user) {
+        const meta = data.user.user_metadata || {};
+        const role: UserRole =
+          meta.role === 'Broker' ? 'Broker' : matchedDemo?.role || 'Admin';
+        const brokerId =
+          meta.brokerId || matchedDemo?.brokerId || 'brk-rahul';
+        const brokerObj = brokers.find((b) => b.id === brokerId);
+
+        loginUser({
+          id: data.user.id,
+          email: data.user.email || normalizedEmail,
+          fullName:
+            meta.fullName ||
+            matchedDemo?.fullName ||
+            normalizedEmail.split('@')[0],
+          role,
+          brokerId: role === 'Broker' ? brokerId : undefined,
+          firmName:
+            role === 'Broker'
+              ? brokerObj?.firmName || 'Channel Partner'
+              : 'soleX Mandate HQ',
+          authMode: 'supabase',
         });
+        setLoading(false);
+        return;
+      }
 
-        if (!error && data.user) {
-          const meta = data.user.user_metadata || {};
-          const role: UserRole =
-            meta.role === 'Broker' ? 'Broker' : matchedDemo?.role || 'Admin';
-          const brokerId =
-            meta.brokerId || matchedDemo?.brokerId || 'brk-rahul';
-          const brokerObj = brokers.find((b) => b.id === brokerId);
+      if (matchedDemo) {
+        loginUser(matchedDemo);
+        setLoading(false);
+        return;
+      }
 
-          loginUser({
-            id: data.user.id,
-            email: data.user.email || normalizedEmail,
-            fullName:
-              meta.fullName ||
-              matchedDemo?.fullName ||
-              normalizedEmail.split('@')[0],
-            role,
-            brokerId: role === 'Broker' ? brokerId : undefined,
-            firmName:
-              role === 'Broker'
-                ? brokerObj?.firmName || 'Channel Partner'
-                : 'soleX Mandate HQ',
-            authMode: 'supabase',
-          });
-          setLoading(false);
-          return;
-        }
-
-        // If user used one of the pre-provisioned soleX enterprise emails, authenticate directly
-        if (matchedDemo) {
-          loginUser(matchedDemo);
-          setLoading(false);
-          return;
-        }
-
-        // Otherwise attempt automatic Supabase account provisioning if credentials are new
-        const { data: signUpData, error: signUpErr } =
-          await supabase.auth.signUp({
-            email: normalizedEmail,
-            password,
-            options: {
-              data: {
-                fullName: normalizedEmail.split('@')[0],
-                role: selectedRole,
-                brokerId:
-                  selectedRole === 'Broker' ? selectedBrokerId : undefined,
-              },
-            },
-          });
-
-        if (!signUpErr && signUpData.user) {
-          const brokerObj = brokers.find((b) => b.id === selectedBrokerId);
-          loginUser({
-            id: signUpData.user.id,
-            email: normalizedEmail,
-            fullName: normalizedEmail.split('@')[0],
-            role: selectedRole,
-            brokerId: selectedRole === 'Broker' ? selectedBrokerId : undefined,
-            firmName:
-              selectedRole === 'Broker'
-                ? brokerObj?.firmName
-                : 'soleX Mandate HQ',
-            authMode: 'supabase',
-          });
-          setLoading(false);
-          return;
-        }
-
-        setErrorMessage(
-          error?.message ||
-            'Invalid credentials. Use one of the verified soleX accounts or create a new account.'
-        );
-      } else {
-        // Sign Up Mode
-        const displayName =
-          fullName.trim() || normalizedEmail.split('@')[0] || 'Mandate User';
-        const brokerObj = brokers.find((b) => b.id === selectedBrokerId);
-
-        const { data, error } = await supabase.auth.signUp({
+      const inferredRole: UserRole = normalizedEmail.includes('broker')
+        ? 'Broker'
+        : 'Admin';
+      const { data: signUpData, error: signUpErr } =
+        await supabase.auth.signUp({
           email: normalizedEmail,
           password,
           options: {
             data: {
-              fullName: displayName,
-              role: selectedRole,
-              brokerId:
-                selectedRole === 'Broker' ? selectedBrokerId : undefined,
-              firmName:
-                selectedRole === 'Broker'
-                  ? brokerObj?.firmName
-                  : 'soleX Mandate HQ',
+              fullName: normalizedEmail.split('@')[0],
+              role: inferredRole,
             },
           },
         });
 
-        if (error) {
-          // Even if email confirmation or rate limit is active on the Supabase instance, allow seamless evaluation login
-          loginUser({
-            id: `usr-${Date.now()}`,
-            email: normalizedEmail,
-            fullName: displayName,
-            role: selectedRole,
-            brokerId: selectedRole === 'Broker' ? selectedBrokerId : undefined,
-            firmName:
-              selectedRole === 'Broker'
-                ? brokerObj?.firmName
-                : 'soleX Mandate HQ',
-            authMode: 'enterprise_session',
-          });
-          setLoading(false);
-          return;
-        }
-
+      if (!signUpErr && signUpData.user) {
         loginUser({
-          id: data.user?.id || `usr-${Date.now()}`,
+          id: signUpData.user.id,
           email: normalizedEmail,
-          fullName: displayName,
-          role: selectedRole,
-          brokerId: selectedRole === 'Broker' ? selectedBrokerId : undefined,
+          fullName: normalizedEmail.split('@')[0],
+          role: inferredRole,
+          brokerId: inferredRole === 'Broker' ? 'brk-rahul' : undefined,
           firmName:
-            selectedRole === 'Broker'
-              ? brokerObj?.firmName
+            inferredRole === 'Broker'
+              ? 'Apex Realty Advisors'
               : 'soleX Mandate HQ',
           authMode: 'supabase',
         });
+        setLoading(false);
+        return;
       }
+
+      setErrorMessage(
+        error?.message ||
+          'Could not verify credentials. Check your email or try the demo.'
+      );
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Authentication failed.');
+      setErrorMessage(err?.message || 'Sign in failed.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row">
-      {/* Left Column: Architectural Mandate Identity & 1-Click Role Evaluation */}
-      <div className="lg:w-7/12 p-6 sm:p-10 lg:p-14 flex flex-col justify-between bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-800">
-        <div>
-          {/* Brand Header */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-display font-bold text-xl">
-                sX
-              </div>
-              <div>
-                <div className="text-lg font-bold tracking-tight text-white font-display">
-                  soleX Mandate OS
-                </div>
-                <div className="text-xs text-slate-400">
-                  Real Estate Master-Franchise & Channel Ecosystem
-                </div>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-md bg-indigo-950/80 border border-indigo-800/70 text-[11px] font-mono text-indigo-300">
-              Supabase Auth + RLS
-            </span>
-          </div>
-
-          {/* Value Proposition */}
-          <div className="mt-8 sm:mt-10 max-w-xl">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-display tracking-tight leading-tight">
-              Unified Mandate Command & Channel Partner Portal
-            </h1>
-            <p className="mt-3 text-sm text-slate-400 leading-relaxed">
-              Manage exclusive developer mandates, real-time 2D & 3D tower
-              inventory, RERA-compliant broker lead attribution, and automated
-              commission releases from a single role-isolated workspace.
-            </p>
-          </div>
-
-          {/* Instant 1-Click Evaluation Accounts for Client Demo */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                1-Click Instant Evaluation Accounts (Role-Based Access Demo)
-              </span>
-              <span className="text-[11px] text-indigo-400 font-medium">
-                Click any card to sign in immediately
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {DEMO_USERS.map((persona) => {
-                const isAdmin = persona.role === 'Admin';
-                return (
-                  <button
-                    key={persona.id}
-                    type="button"
-                    onClick={() => handleQuickPersonaLogin(persona)}
-                    className="group text-left p-4 rounded-xl bg-slate-950/70 hover:bg-slate-800/90 border border-slate-800 hover:border-indigo-500/70 transition-all cursor-pointer flex flex-col justify-between gap-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            isAdmin
-                              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                              : 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                          }`}
-                        >
-                          {isAdmin ? (
-                            <Building2 className="w-4 h-4" />
-                          ) : (
-                            <Briefcase className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
-                            {persona.fullName}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            {persona.firmName}
-                          </div>
-                        </div>
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
-                          isAdmin
-                            ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
-                            : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                        }`}
-                      >
-                        {persona.role}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
-                      <span className="font-mono text-[11px] text-slate-400 truncate">
-                        {persona.email}
-                      </span>
-                      <span className="text-indigo-400 font-semibold flex items-center gap-1 shrink-0 group-hover:translate-x-0.5 transition-transform">
-                        <span>Enter</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[var(--subtle)] text-[var(--text-primary)]">
+      {/* Left 40% (5/12): Eclipse 950 panel with ivory soleX wordmark, one Fraunces line of positioning, and the ink-wash texture */}
+      <aside className="lg:col-span-5 ink-wash-eclipse-panel p-8 sm:p-12 flex flex-col justify-between text-[#E4E4F2]">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-[6px] h-[6px] rotate-45 shrink-0"
+            style={{ backgroundColor: '#8686AC' }}
+            aria-hidden="true"
+          />
+          <span
+            className="text-[15px] leading-[20px] font-semibold tracking-tight"
+            style={{ color: '#FFFFE3' }}
+          >
+            soleX
+          </span>
         </div>
 
-        {/* Bottom Security & Architecture Footnote */}
-        <div className="mt-8 pt-6 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-400">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>PostgreSQL RLS Isolation</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
-            <span>Pessimistic Unit Locking</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>MAHARERA & HARERA Ready</span>
-          </div>
+        <div className="my-12 lg:my-0 max-w-md">
+          <h1
+            className="font-serif-title text-[26px] sm:text-[30px] leading-[38px] font-semibold tracking-tight"
+            style={{ color: '#FFFFE3', textWrap: 'balance' }}
+          >
+            Architectural inventory, buyer allotment, and channel settlements in one ledger.
+          </h1>
         </div>
-      </div>
 
-      {/* Right Column: Supabase Email & Password Authentication Form */}
-      <div className="lg:w-5/12 p-6 sm:p-10 lg:p-14 flex items-center justify-center bg-slate-950">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
-          {/* Mode Switcher */}
-          <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors cursor-pointer ${
-                mode === 'signin'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Sign In to Workspace
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors cursor-pointer ${
-                mode === 'signup'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+        <div className="t-12 font-mono" style={{ color: '#8686AC' }}>
+          soleX Mandate Operating System
+        </div>
+      </aside>
 
+      {/* Right 60% (7/12): On Paper 25, a 360px form */}
+      <main className="lg:col-span-7 bg-[var(--subtle)] flex items-center justify-center p-6 sm:p-12">
+        <div className="w-full max-w-[360px]">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-white font-display">
-              {mode === 'signin'
-                ? 'Enterprise Portal Login'
-                : 'Register Mandate or Broker Account'}
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              {mode === 'signin'
-                ? 'Authenticate with your soleX email or Supabase credentials.'
-                : 'Create a new account in Supabase Auth with role-scoped permissions.'}
+            <h2 className="t-22-title text-[var(--text-primary)]">Sign in</h2>
+            <p className="t-13 text-[var(--text-secondary)] mt-1">
+              Enter your mandate desk or channel partner credentials.
             </p>
           </div>
 
           {errorMessage && (
-            <div className="mb-4 p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-xs text-rose-200">
+            <div
+              role="alert"
+              className="mb-4 px-3 py-2 rounded-[6px] border t-12"
+              style={{
+                backgroundColor: 'var(--status-blocked-tint)',
+                borderColor: 'var(--status-blocked-border)',
+                color: 'var(--status-blocked)',
+              }}
+            >
               {errorMessage}
             </div>
           )}
 
-          {infoMessage && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-200">
-              {infoMessage}
-            </div>
-          )}
-
           <form onSubmit={handleFormSubmit} className="space-y-4">
-            {mode === 'signup' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g., Rohan Kapoor"
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-            )}
-
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Work Email Address
+              <label
+                htmlFor="signin-email"
+                className="block t-12 text-[var(--text-primary)] mb-1.5"
+              >
+                Email
               </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="director@solexmandate.in"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+              <input
+                id="signin-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@company.in"
+                className="input-control"
+              />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label
+                htmlFor="signin-password"
+                className="block t-12 text-[var(--text-primary)] mb-1.5"
+              >
                 Password
               </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                  aria-label="Toggle password visibility"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+              <input
+                id="signin-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input-control"
+              />
             </div>
-
-            {/* Access Role Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Access Role Scope
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('Admin')}
-                  className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
-                    selectedRole === 'Admin'
-                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>Admin (HQ)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('Broker')}
-                  className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
-                    selectedRole === 'Broker'
-                      ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>Channel Broker</span>
-                </button>
-              </div>
-            </div>
-
-            {selectedRole === 'Broker' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Channel Partner Firm Profile
-                </label>
-                <select
-                  value={selectedBrokerId}
-                  onChange={(e) => setSelectedBrokerId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
-                >
-                  {brokers.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} — {b.firmName} ({b.tier})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              className="btn-primary w-full"
             >
-              <span>
-                {loading
-                  ? 'Authenticating with Supabase...'
-                  : mode === 'signin'
-                  ? 'Sign In to soleX OS'
-                  : 'Create Supabase Account & Enter'}
-              </span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          {/* Pre-filled Demo Credentials Helper */}
-          <div className="mt-6 pt-5 border-t border-slate-800/90 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Demo Password:</span>
-            <code className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300 font-mono">
-              SolexMandate@2026
-            </code>
+          <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between t-12 text-[var(--text-tertiary)]">
+            <span>Evaluation workspace</span>
+            <button
+              type="button"
+              onClick={() => setDemoDialogOpen(true)}
+              className="text-[var(--accent)] hover:underline cursor-pointer font-medium"
+            >
+              Try the demo
+            </button>
           </div>
         </div>
-      </div>
+      </main>
+
+      {/* Quiet Demo Role Selection Dialog (480px, no passwords displayed) */}
+      {demoDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(15, 14, 71, 0.35)' }}
+          onClick={() => setDemoDialogOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-label="Select a demo workspace role"
+            className="w-full max-w-[480px] bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+              <span className="t-14-medium text-[var(--text-primary)]">
+                Select a demo role
+              </span>
+              <button
+                type="button"
+                onClick={() => setDemoDialogOpen(false)}
+                className="btn-ghost btn-sm px-1.5"
+                aria-label="Close demo dialog"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="divide-y divide-[var(--border)]">
+              {DEMO_USERS.map((persona) => (
+                <button
+                  key={persona.id}
+                  type="button"
+                  onClick={() => handleDemoSelect(persona)}
+                  className="w-full px-4 py-3 text-left hover:bg-[var(--subtle)] transition-colors flex items-center justify-between gap-4 cursor-pointer"
+                >
+                  <div>
+                    <div className="t-13-medium text-[var(--text-primary)]">
+                      {persona.fullName}
+                    </div>
+                    <div className="t-12 text-[var(--text-secondary)] mt-0.5">
+                      {persona.firmName}
+                    </div>
+                  </div>
+                  <span className="t-12 font-mono text-[var(--text-tertiary)]">
+                    {persona.role === 'Admin'
+                      ? 'Mandate admin'
+                      : 'Channel partner'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
