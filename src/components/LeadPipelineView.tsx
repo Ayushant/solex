@@ -254,10 +254,10 @@ export const LeadPipelineView: React.FC = () => {
               type="button"
               onClick={() => setOpenMenuLeadId(isMenuOpen ? null : lead.id)}
               aria-label={`Actions for ${lead.buyerName}`}
-              className={`w-6 h-6 rounded-[6px] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--subtle)] transition-opacity cursor-pointer ${
+              className={`w-7 h-7 sm:w-6 sm:h-6 rounded-[6px] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--subtle)] transition-opacity cursor-pointer ${
                 isMenuOpen
                   ? 'opacity-100 bg-[var(--subtle)]'
-                  : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                  : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100'
               }`}
             >
               <MoreHorizontal className="w-4 h-4" />
@@ -271,7 +271,7 @@ export const LeadPipelineView: React.FC = () => {
                     setOpenMenuLeadId(null);
                     setSelectedLeadId(lead.id);
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-[var(--subtle)] text-[var(--text-primary)] cursor-pointer"
+                  className="w-full text-left px-3 py-2 sm:py-1.5 hover:bg-[var(--subtle)] text-[var(--text-primary)] cursor-pointer"
                 >
                   Inspect lead
                 </button>
@@ -286,7 +286,7 @@ export const LeadPipelineView: React.FC = () => {
                           updateLeadStage(lead.id, s);
                           setOpenMenuLeadId(null);
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-[var(--subtle)] text-[var(--text-secondary)] cursor-pointer"
+                        className="w-full text-left px-3 py-2 sm:py-1.5 hover:bg-[var(--subtle)] text-[var(--text-secondary)] cursor-pointer"
                       >
                         Move to {s}
                       </button>
@@ -330,7 +330,7 @@ export const LeadPipelineView: React.FC = () => {
 
   return (
     <div
-      className="space-y-5"
+      className="space-y-4 sm:space-y-5"
       onClick={() => {
         if (openMenuLeadId) setOpenMenuLeadId(null);
       }}
@@ -344,16 +344,7 @@ export const LeadPipelineView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportLeadsCsv}
-            className="btn-secondary"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export to CSV</span>
-          </button>
-
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
           <div
             role="tablist"
             aria-label="Pipeline display mode"
@@ -387,20 +378,32 @@ export const LeadPipelineView: React.FC = () => {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowNewLeadModal(true)}
-            className="btn-primary"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New lead</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportLeadsCsv}
+              className="btn-secondary"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline sm:inline">Export to CSV</span>
+              <span className="xs:hidden sm:hidden">CSV</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowNewLeadModal(true)}
+              className="btn-primary"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New lead</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 sm:max-w-md">
           <label htmlFor="lead-pipeline-search" className="sr-only">
             Filter leads by buyer name or contact number
           </label>
@@ -426,12 +429,12 @@ export const LeadPipelineView: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between sm:justify-end gap-3">
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
             aria-label="Filter leads by project"
-            className="input-control w-auto"
+            className="input-control flex-1 sm:flex-initial sm:w-auto"
           >
             <option value="All">All projects</option>
             {projects.map((p) => (
@@ -441,7 +444,7 @@ export const LeadPipelineView: React.FC = () => {
             ))}
           </select>
 
-          <span className="t-12 t-mono text-[var(--text-tertiary)] whitespace-nowrap">
+          <span className="t-12 t-mono text-[var(--text-tertiary)] whitespace-nowrap shrink-0">
             {scopedLeads.length} of {roleAndProjectLeads.length}
           </span>
         </div>
@@ -452,33 +455,69 @@ export const LeadPipelineView: React.FC = () => {
         <>
           {/* Mobile (<640px): Stage selector + list */}
           <div className="sm:hidden space-y-3">
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-[var(--border)]">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1.5 border-b border-[var(--border)]">
               {STAGES.map((stage) => {
                 const count = scopedLeads.filter(
                   (l) => l.stage === stage
                 ).length;
                 const active = mobileStage === stage;
+                const stageColor = STAGE_COLORS[stage];
                 return (
                   <button
                     key={stage}
                     type="button"
                     onClick={() => setMobileStage(stage)}
-                    className={`px-2.5 py-1.5 rounded-[6px] t-12 whitespace-nowrap cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-[6px] t-12 whitespace-nowrap inline-flex items-center gap-1.5 cursor-pointer shrink-0 ${
                       active
-                        ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)] font-medium'
+                        ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border-strong)] font-medium'
                         : 'text-[var(--text-secondary)]'
                     }`}
                   >
-                    {stage} <span className="t-mono">({count})</span>
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: stageColor }}
+                    />
+                    <span>{stage}</span>
+                    <span className="t-mono text-[var(--text-tertiary)]">
+                      {count}
+                    </span>
                   </button>
                 );
               })}
             </div>
-            <div className="space-y-2.5">
-              {scopedLeads
-                .filter((l) => l.stage === mobileStage)
-                .map((lead) => renderLeadCard(lead))}
-            </div>
+
+            {(() => {
+              const mobileStageLeads = scopedLeads.filter(
+                (l) => l.stage === mobileStage
+              );
+              const mobileStageBudget = mobileStageLeads.reduce(
+                (acc, l) => acc + l.budgetInr,
+                0
+              );
+              return (
+                <>
+                  <div className="flex items-center justify-between px-1 t-12 text-[var(--text-secondary)]">
+                    <span>
+                      {mobileStageLeads.length}{' '}
+                      {mobileStageLeads.length === 1 ? 'lead' : 'leads'} in{' '}
+                      {mobileStage}
+                    </span>
+                    <span className="t-mono text-[var(--text-primary)]">
+                      {formatInr(mobileStageBudget)}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {mobileStageLeads.length === 0 ? (
+                      <div className="py-6 text-center t-12 text-[var(--text-tertiary)] border border-[var(--border)] rounded-[10px] bg-[var(--surface)]">
+                        No leads in {mobileStage.toLowerCase()}.
+                      </div>
+                    ) : (
+                      mobileStageLeads.map((lead) => renderLeadCard(lead))
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Desktop/Tablet (>=640px): 4 columns on Paper 50, headers in stage colour with mono count and stage value */}
@@ -585,24 +624,43 @@ export const LeadPipelineView: React.FC = () => {
                     <div
                       key={lead.id}
                       onClick={() => setSelectedLeadId(lead.id)}
-                      className="p-3.5 space-y-1 cursor-pointer hover:bg-[var(--subtle)]"
+                      className="p-3.5 space-y-1.5 cursor-pointer hover:bg-[var(--subtle)]"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="t-14-medium text-[var(--text-primary)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="t-14-medium text-[var(--text-primary)] truncate">
                           {lead.buyerName}
                         </span>
-                        <span className="t-13 t-mono text-[var(--text-primary)]">
+                        <span className="t-13-medium t-mono text-[var(--text-primary)] shrink-0">
                           {formatInr(lead.budgetInr)}
                         </span>
                       </div>
-                      <div className="t-12 text-[var(--text-secondary)]">
-                        {proj?.name} · {lead.interestedBhk} · {lead.stage}
+                      <div className="flex items-center justify-between gap-2 t-12">
+                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                          {proj && (
+                            <ProjectChip projectId={proj.id} name={proj.name} />
+                          )}
+                          <span className="text-[var(--text-secondary)] truncate">
+                            {lead.interestedBhk}
+                          </span>
+                        </div>
+                        <span
+                          className="inline-flex items-center gap-1 t-12 font-medium shrink-0"
+                          style={{ color: STAGE_COLORS[lead.stage] }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{
+                              backgroundColor: STAGE_COLORS[lead.stage],
+                            }}
+                          />
+                          <span>{lead.stage}</span>
+                        </span>
                       </div>
                       <div className="flex items-center justify-between t-12 text-[var(--text-tertiary)]">
                         <span className="t-mono">
                           {maskPhone(lead.phone, canViewPhone(lead))}
                         </span>
-                        <span>{brk?.firmName}</span>
+                        <span className="truncate">{brk?.firmName}</span>
                       </div>
                     </div>
                   );
@@ -759,17 +817,17 @@ export const LeadPipelineView: React.FC = () => {
           <aside
             role="dialog"
             aria-label={`Lead ${selectedLead.buyerName}`}
-            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-[100dvh] border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
           >
             <div className="divide-y divide-[var(--border)]">
               <div
-                className="p-5 flex items-start justify-between gap-4 border-b"
+                className="p-4 sm:p-5 flex items-start justify-between gap-4 border-b sticky top-0 z-10"
                 style={{
                   backgroundColor: 'var(--ivory-band)',
                   borderColor: 'var(--ivory-band-border)',
                 }}
               >
-                <div>
+                <div className="min-w-0">
                   <div className="t-12 text-[var(--text-secondary)]">
                     {
                       projects.find((p) => p.id === selectedLead.projectId)
@@ -777,21 +835,21 @@ export const LeadPipelineView: React.FC = () => {
                     }{' '}
                     · {selectedLead.interestedBhk}
                   </div>
-                  <h2 className="t-22-title text-[var(--text-primary)] mt-1">
+                  <h2 className="t-22-title text-[var(--text-primary)] mt-1 truncate">
                     {selectedLead.buyerName}
                   </h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedLeadId(null)}
-                  className="btn-ghost btn-sm px-2"
+                  className="btn-ghost btn-sm px-2 shrink-0"
                   aria-label="Close lead drawer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-5 grid grid-cols-2 gap-4 t-13">
+              <div className="p-4 sm:p-5 grid grid-cols-2 gap-4 t-13">
                 <div>
                   <div className="t-12 text-[var(--text-tertiary)]">Phone</div>
                   <div className="t-mono text-[var(--text-primary)] mt-0.5">
@@ -835,7 +893,7 @@ export const LeadPipelineView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-5 space-y-2">
+              <div className="p-4 sm:p-5 space-y-2">
                 <div className="t-12 text-[var(--text-tertiary)]">Stage</div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {STAGES.map((stg) => {
@@ -866,7 +924,7 @@ export const LeadPipelineView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-5 space-y-1.5">
+              <div className="p-4 sm:p-5 space-y-1.5">
                 <div className="t-12 text-[var(--text-tertiary)]">Notes</div>
                 <p className="t-13 text-[var(--text-secondary)]">
                   {selectedLead.notes || 'No requirement notes recorded.'}
@@ -874,7 +932,7 @@ export const LeadPipelineView: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-end gap-2">
+            <div className="sticky bottom-0 p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setSelectedLeadId(null)}
@@ -906,7 +964,7 @@ export const LeadPipelineView: React.FC = () => {
 
       {/* Register New Lead Dialog (480px) */}
       {showNewLeadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
           <div
             className="fixed inset-0 bg-black/40"
             onClick={() => setShowNewLeadModal(false)}
@@ -914,9 +972,9 @@ export const LeadPipelineView: React.FC = () => {
           <div
             role="dialog"
             aria-label="New buyer lead"
-            className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse overflow-hidden"
+            className="relative z-10 w-full max-w-[480px] max-h-[92dvh] overflow-y-auto rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse"
           >
-            <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[var(--border)] flex items-center justify-between sticky top-0 bg-[var(--surface)] z-10">
               <h2 className="t-16 text-[var(--text-primary)]">
                 New buyer lead
               </h2>
@@ -930,7 +988,7 @@ export const LeadPipelineView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateLead} className="p-5 space-y-3.5">
+            <form onSubmit={handleCreateLead} className="p-4 sm:p-5 space-y-3.5">
               <div>
                 <label className="block t-12 text-[var(--text-secondary)] mb-1">
                   Buyer name
@@ -945,7 +1003,7 @@ export const LeadPipelineView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block t-12 text-[var(--text-secondary)] mb-1">
                     Mobile number
@@ -973,7 +1031,7 @@ export const LeadPipelineView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block t-12 text-[var(--text-secondary)] mb-1">
                     Project

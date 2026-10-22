@@ -871,7 +871,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[460px] sm:h-[520px] rounded-[10px] overflow-hidden border border-[var(--border)] bg-[#0B0B1E] select-none">
+    <div className="relative w-full h-[380px] sm:h-[520px] rounded-[10px] overflow-hidden border border-[var(--border)] bg-[#0B0B1E] select-none">
       <div ref={canvasMountRef} className="w-full h-full" />
 
       {hoveredUnit && (
@@ -917,7 +917,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
       )}
 
       <div
-        className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]"
+        className="absolute bottom-2.5 sm:bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]"
         style={{ width: 'min(780px, 95vw)' }}
       >
         <button
@@ -941,16 +941,16 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
 
         {!dockCollapsed && (
           <div
-            className="w-full px-3 py-2 rounded-[10px] border border-[#26264A] flex flex-wrap items-center justify-between gap-3 t-12 text-[#E4E4F2] shadow-eclipse"
+            className="w-full px-2.5 sm:px-3 py-2 rounded-[10px] border border-[#26264A] flex flex-wrap items-center justify-between gap-2 sm:gap-3 t-12 text-[#E4E4F2] shadow-eclipse"
             style={{ backgroundColor: '#0F0E47' }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Layers className="w-3.5 h-3.5 text-[#8686AC] shrink-0" />
               <label
                 htmlFor="floor-explode-slider"
-                className="whitespace-nowrap text-[#A9A9C6]"
+                className="whitespace-nowrap text-[#A9A9C6] text-[11px] sm:text-[12px]"
               >
-                Separate floors
+                Floors
               </label>
               <input
                 id="floor-explode-slider"
@@ -962,7 +962,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
                 onChange={(e) =>
                   handleExplodeChange(parseFloat(e.target.value))
                 }
-                className="w-20 accent-[#FFFFE3] cursor-pointer"
+                className="w-16 sm:w-20 accent-[#FFFFE3] cursor-pointer"
               />
               {explodeFactor > 0 && (
                 <button
@@ -976,7 +976,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
               <Camera className="w-3.5 h-3.5 text-[#8686AC] mr-1 shrink-0 hidden sm:inline" />
               {(
                 [
@@ -990,7 +990,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
                   key={preset.id}
                   type="button"
                   onClick={() => handleCameraPreset(preset.id)}
-                  className={`px-2 py-1 rounded-[6px] t-12 transition-colors cursor-pointer ${
+                  className={`px-2 py-1 rounded-[6px] text-[11px] sm:text-[12px] transition-colors cursor-pointer shrink-0 ${
                     activePreset === preset.id
                       ? 'bg-[#FFFFE3] text-[#0F0E47] font-medium'
                       : 'text-[#A9A9C6] hover:bg-[#1B1A4E] hover:text-white'
@@ -1005,7 +1005,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleLightingToggle('daylight')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] t-12 transition-colors cursor-pointer ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] text-[11px] sm:text-[12px] transition-colors cursor-pointer ${
                   lightingMood === 'daylight'
                     ? 'bg-[#272757] text-[#FFFFE3]'
                     : 'text-[#8686AC] hover:text-white'
@@ -1017,7 +1017,7 @@ export const ThreeTowerView: React.FC<ThreeTowerViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleLightingToggle('golden')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] t-12 transition-colors cursor-pointer ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-[4px] text-[11px] sm:text-[12px] transition-colors cursor-pointer ${
                   lightingMood === 'golden'
                     ? 'bg-[#272757] text-[#FFFFE3]'
                     : 'text-[#8686AC] hover:text-white'

@@ -198,26 +198,26 @@ ${leadSummary}`;
       <aside
         role="dialog"
         aria-label="Copilot"
-        className="drawer-enter relative z-10 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between"
+        className="drawer-enter relative z-10 w-full max-w-[480px] bg-[var(--surface)] h-[100dvh] border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between"
       >
         {/* Ivory Header Strip */}
         <div
-          className="px-5 py-3.5 border-b flex items-center justify-between gap-2"
+          className="px-4 sm:px-5 py-3.5 border-b flex items-center justify-between gap-2"
           style={{
             backgroundColor: 'var(--ivory-band)',
             borderColor: 'var(--ivory-band-border)',
           }}
         >
-          <div>
+          <div className="min-w-0">
             <h2 className="t-16 text-[var(--text-primary)]">Copilot</h2>
-            <div className="t-12 text-[var(--text-secondary)]">
+            <div className="t-12 text-[var(--text-secondary)] truncate">
               {role === 'Admin'
                 ? 'Mandate HQ scope'
                 : `${activeBroker?.firmName} scope`}
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value as ModelTier)}
@@ -259,7 +259,7 @@ ${leadSummary}`;
         </div>
 
         {/* Thread */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -294,15 +294,15 @@ ${leadSummary}`;
         </div>
 
         {/* Footer Input */}
-        <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] space-y-2.5">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="p-3.5 sm:p-4 border-t border-[var(--border)] bg-[var(--subtle)] space-y-2.5">
+          <div className="flex sm:flex-wrap gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
             {quickPrompts.map((qp, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => sendPrompt(qp)}
                 disabled={isLoading}
-                className="btn-secondary btn-sm t-12"
+                className="btn-secondary btn-sm t-12 shrink-0"
               >
                 {qp}
               </button>
@@ -326,7 +326,7 @@ ${leadSummary}`;
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="btn-primary"
+              className="btn-primary shrink-0"
             >
               Send
             </button>

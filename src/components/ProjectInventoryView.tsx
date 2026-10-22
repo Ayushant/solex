@@ -94,15 +94,15 @@ export const ProjectInventoryView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Page Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="t-22-title text-[var(--text-primary)]">Inventory</h1>
           <p className="t-13 text-[var(--text-secondary)] mt-0.5">
             Select a unit in the stacking plan or 3D view to inspect the cost sheet, place a 24h hold, or book.
           </p>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => openBookingModal({ projectId: project.id })}
@@ -110,38 +110,41 @@ export const ProjectInventoryView: React.FC = () => {
           >
             Book unit
           </button>
-        </div>
 
-        {/* Mobile (< 640px) Actions Menu */}
-        <div className="relative sm:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="btn-secondary px-2"
-            aria-label="Inventory actions"
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
-          {mobileMenuOpen && (
-            <div className="absolute right-0 mt-1 w-40 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  openBookingModal({ projectId: project.id });
-                }}
-                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
-              >
-                Book unit
-              </button>
-            </div>
-          )}
+          {/* Mobile (< 640px) Actions Menu */}
+          <div className="relative sm:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="btn-secondary px-2"
+              aria-label="Inventory actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {mobileMenuOpen && (
+              <div className="absolute right-0 mt-1 w-40 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setViewMode(viewMode === '2d' ? '3d' : '2d');
+                  }}
+                  className="w-full px-3 py-2 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+                >
+                  Switch to {viewMode === '2d' ? '3D view' : '2D plan'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Project Tabs + Right-Aligned 2D/3D Segmented Control */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)]">
-        <div className="flex items-center gap-5 overflow-x-auto" role="tablist">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-[var(--border)]">
+        <div
+          className="flex items-center gap-5 overflow-x-auto no-scrollbar -mb-px"
+          role="tablist"
+        >
           {projects.map((p, idx) => {
             const active = p.id === project.id;
             const projColor = getProjectColor(p.id, idx);
@@ -152,7 +155,7 @@ export const ProjectInventoryView: React.FC = () => {
                 aria-selected={active}
                 type="button"
                 onClick={() => setSelectedProjectId(p.id)}
-                className={`pb-2.5 -mb-px t-13-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2 ${
+                className={`pb-2.5 t-13-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2 ${
                   active
                     ? 'border-[var(--accent)] text-[var(--text-primary)]'
                     : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -169,7 +172,10 @@ export const ProjectInventoryView: React.FC = () => {
         </div>
 
         {/* Right-Aligned 2D / 3D Segmented Control */}
-        <div className="pb-2 flex items-center gap-1">
+        <div className="pb-2 flex items-center justify-between sm:justify-end gap-2">
+          <span className="sm:hidden t-12 text-[var(--text-tertiary)]">
+            Display mode
+          </span>
           <div className="inline-flex p-0.5 rounded-[6px] bg-[var(--subtle)] border border-[var(--border)]">
             <button
               type="button"
@@ -197,15 +203,15 @@ export const ProjectInventoryView: React.FC = () => {
         </div>
       </div>
 
-      {/* Compact Key-Facts Strip (Developer, RERA ID mono, Possession, Mandate fee, Channel share) */}
-      <div className="px-4 py-2.5 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] flex flex-wrap items-center gap-x-6 gap-y-2 t-12">
-        <div>
+      {/* Compact Key-Facts Strip (2-col grid on mobile, inline flex on tablet/desktop) */}
+      <div className="px-3.5 sm:px-4 py-2.5 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-1.5 t-12">
+        <div className="truncate">
           <span className="text-[var(--text-tertiary)]">Developer: </span>
           <span className="text-[var(--text-primary)] font-medium">
             {project.developerName}
           </span>
         </div>
-        <div>
+        <div className="truncate">
           <span className="text-[var(--text-tertiary)]">RERA ID: </span>
           <span className="font-mono tabular-nums text-[var(--text-primary)]">
             {project.reraNumber}
@@ -223,7 +229,7 @@ export const ProjectInventoryView: React.FC = () => {
             {formatPct(project.mandateCommissionPct)}
           </span>
         </div>
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <span className="text-[var(--text-tertiary)]">Channel share: </span>
           <span className="font-mono tabular-nums text-[var(--text-primary)]">
             {formatPct(project.brokerSharePct)}
@@ -232,7 +238,7 @@ export const ProjectInventoryView: React.FC = () => {
       </div>
 
       {/* Legend with Live Counts Above + Filter Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         <StatusLegend
           availableCount={availableCount}
           holdCount={holdCount}
@@ -240,7 +246,7 @@ export const ProjectInventoryView: React.FC = () => {
           blockedCount={0}
         />
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
           <label htmlFor="inventory-status-filter" className="sr-only">
             Filter units by status
           </label>
@@ -251,7 +257,7 @@ export const ProjectInventoryView: React.FC = () => {
               setStatusFilter(e.target.value as 'All' | UnitStatus)
             }
             aria-label="Filter units by status"
-            className="input-control t-12 w-auto"
+            className="input-control t-12 w-full sm:w-auto"
           >
             <option value="All">All statuses ({projectUnits.length})</option>
             <option value="Available">Available ({availableCount})</option>
@@ -267,7 +273,7 @@ export const ProjectInventoryView: React.FC = () => {
             value={bhkFilter}
             onChange={(e) => setBhkFilter(e.target.value)}
             aria-label="Filter units by configuration"
-            className="input-control t-12 w-auto"
+            className="input-control t-12 w-full sm:w-auto"
           >
             <option value="All">All configurations</option>
             <option value="2 BHK Luxury">2 BHK Luxury</option>
@@ -282,7 +288,7 @@ export const ProjectInventoryView: React.FC = () => {
                 setStatusFilter('All');
                 setBhkFilter('All');
               }}
-              className="btn-ghost btn-sm"
+              className="btn-ghost btn-sm col-span-2 sm:col-span-1"
             >
               Reset
             </button>
@@ -294,10 +300,10 @@ export const ProjectInventoryView: React.FC = () => {
       {viewMode === '3d' ? (
         <Suspense
           fallback={
-            <div className="w-full h-[480px] sm:h-[520px] rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6 flex flex-col justify-between">
+            <div className="w-full h-[380px] sm:h-[520px] rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6 flex flex-col justify-between">
               <div className="h-4 w-48 skeleton-block" />
-              <div className="flex-1 my-6 skeleton-block" />
-              <div className="h-9 w-80 mx-auto skeleton-block" />
+              <div className="flex-1 my-4 sm:my-6 skeleton-block" />
+              <div className="h-9 w-full max-w-xs mx-auto skeleton-block" />
             </div>
           }
         >
@@ -331,11 +337,16 @@ export const ProjectInventoryView: React.FC = () => {
               >
                 <thead>
                   <tr className="h-9 bg-[var(--subtle)] border-b border-[var(--border)] text-[12px] uppercase tracking-wider text-[var(--text-tertiary)] font-medium">
-                    <th className="sticky left-0 z-10 bg-[var(--subtle)] px-4 w-28 border-r border-[var(--border)]">
+                    <th className="sticky left-0 z-10 bg-[var(--subtle)] px-2.5 sm:px-4 w-16 sm:w-28 border-r border-[var(--border)]">
                       Floor
                     </th>
-                    <th className="px-4">
-                      Stacking plan ({project.wings.join(' · ')}) — Arrow keys navigate, Enter inspects
+                    <th className="px-3 sm:px-4">
+                      <span className="hidden sm:inline">
+                        Stacking plan ({project.wings.join(' · ')}) — Arrow keys navigate, Enter inspects
+                      </span>
+                      <span className="sm:hidden">
+                        Stacking plan ({project.wings.join(' · ')}) · Tap unit
+                      </span>
                     </th>
                     <th className="px-4 text-right hidden md:table-cell">
                       Configuration & area
@@ -365,25 +376,25 @@ export const ProjectInventoryView: React.FC = () => {
                         className="hover:bg-[var(--subtle)] transition-colors"
                       >
                         {/* Pinned Left Floor Column */}
-                        <td className="sticky left-0 z-10 bg-[var(--surface)] px-4 py-1.5 border-r border-[var(--border)] align-middle">
+                        <td className="sticky left-0 z-10 bg-[var(--surface)] px-2.5 sm:px-4 py-1.5 border-r border-[var(--border)] align-middle">
                           <div className="font-mono tabular-nums t-13-medium text-[var(--text-primary)]">
                             F{String(floorNum).padStart(2, '0')}
                           </div>
-                          <div className="t-12 text-[var(--text-tertiary)]">
+                          <div className="t-12 text-[var(--text-tertiary)] text-[11px] sm:text-[12px]">
                             {floorNum === project.floors ? 'Crown' : 'Typical'}
                           </div>
                         </td>
 
                         {/* 76×52px Unit Cells: unit number in mono, configuration in 11px, 14% status fill + 1px status border, ivory hover */}
-                        <td className="px-4 py-1.5 align-middle">
-                          <div className="flex items-center gap-2">
+                        <td className="px-3 sm:px-4 py-1.5 align-middle">
+                          <div className="flex items-center gap-1.5 sm:gap-2">
                             {allFloorUnits.map((unit) => {
                               const isVisible = filteredUnitIds.has(unit.id);
                               if (!isVisible) {
                                 return (
                                   <div
                                     key={unit.id}
-                                    className="w-[76px] h-[52px] rounded-[6px] border border-dashed border-[var(--border)] opacity-35 shrink-0"
+                                    className="w-[74px] sm:w-[76px] h-[52px] rounded-[6px] border border-dashed border-[var(--border)] opacity-35 shrink-0"
                                     aria-hidden="true"
                                   />
                                 );
@@ -440,7 +451,7 @@ export const ProjectInventoryView: React.FC = () => {
                                       : borderVar,
                                     borderWidth: isSelected ? '2px' : '1px',
                                   }}
-                                  className="stacking-cell w-[76px] h-[52px] shrink-0 rounded-[6px] px-2 py-1 flex flex-col justify-between text-left cursor-pointer"
+                                  className="stacking-cell w-[74px] sm:w-[76px] h-[52px] shrink-0 rounded-[6px] px-2 py-1 flex flex-col justify-between text-left cursor-pointer"
                                 >
                                   <div className="flex items-center justify-between w-full">
                                     <span className="font-mono tabular-nums t-13-medium text-[var(--text-primary)]">

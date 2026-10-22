@@ -122,31 +122,36 @@ export const AuthLoginView: React.FC = () => {
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[var(--subtle)] text-[var(--text-primary)]">
       {/* Left 40% (5/12): Eclipse 950 panel with ivory soleX wordmark, one Fraunces line of positioning, and the ink-wash texture */}
-      <aside className="lg:col-span-5 ink-wash-eclipse-panel p-8 sm:p-12 flex flex-col justify-between text-[#E4E4F2]">
-        <div className="flex items-center gap-2">
-          <span
-            className="w-[6px] h-[6px] rotate-45 shrink-0"
-            style={{ backgroundColor: '#8686AC' }}
-            aria-hidden="true"
-          />
-          <span
-            className="text-[15px] leading-[20px] font-semibold tracking-tight"
-            style={{ color: '#FFFFE3' }}
-          >
-            soleX
+      <aside className="lg:col-span-5 ink-wash-eclipse-panel p-6 sm:p-10 lg:p-12 flex flex-col justify-between text-[#E4E4F2]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className="w-[6px] h-[6px] rotate-45 shrink-0"
+              style={{ backgroundColor: '#8686AC' }}
+              aria-hidden="true"
+            />
+            <span
+              className="text-[15px] leading-[20px] font-semibold tracking-tight"
+              style={{ color: '#FFFFE3' }}
+            >
+              soleX
+            </span>
+          </div>
+          <span className="lg:hidden t-12 font-mono" style={{ color: '#8686AC' }}>
+            Mandate OS
           </span>
         </div>
 
-        <div className="my-12 lg:my-0 max-w-md">
+        <div className="mt-5 mb-2 lg:my-0 max-w-md">
           <h1
-            className="font-serif-title text-[26px] sm:text-[30px] leading-[38px] font-semibold tracking-tight"
+            className="font-serif-title text-[22px] sm:text-[28px] lg:text-[30px] leading-[30px] sm:leading-[36px] lg:leading-[38px] font-semibold tracking-tight"
             style={{ color: '#FFFFE3', textWrap: 'balance' }}
           >
             Architectural inventory, buyer allotment, and channel settlements in one ledger.
           </h1>
         </div>
 
-        <div className="t-12 font-mono" style={{ color: '#8686AC' }}>
+        <div className="hidden lg:block t-12 font-mono" style={{ color: '#8686AC' }}>
           soleX Mandate Operating System
         </div>
       </aside>

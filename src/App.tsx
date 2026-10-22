@@ -34,6 +34,8 @@ import {
   ChevronDown,
   Code2,
   Database,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 export default function App() {
@@ -61,6 +63,7 @@ export default function App() {
   } = useSolexStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDark, setIsDark] = useState<boolean>(() =>
     document.documentElement.classList.contains('dark')
   );
@@ -90,16 +93,20 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [toast, dismissToast]);
 
-  // Global ⌘K / Ctrl+K shortcut for search palette
+  // Global ⌘K / Ctrl+K shortcut for search palette & ⌘B / Ctrl+B for sidebar toggle
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandOpen((prev) => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
       } else if (e.key === 'Escape') {
         setCommandOpen(false);
         setNotificationsOpen(false);
         setAvatarMenuOpen(false);
+        setMobileMenuOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -280,16 +287,25 @@ export default function App() {
               soleX
             </span>
           </div>
-          {isMobileDrawer && (
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-1.5 rounded-[6px] text-[#8686AC] hover:text-white cursor-pointer"
-              aria-label="Close navigation drawer"
-            >
+          <button
+            type="button"
+            onClick={() => {
+              if (isMobileDrawer) {
+                setMobileMenuOpen(false);
+              } else {
+                setSidebarOpen(false);
+              }
+            }}
+            title={isMobileDrawer ? 'Close navigation menu' : 'Collapse sidebar (⌘B)'}
+            className="p-1.5 rounded-[6px] text-[#8686AC] hover:text-white hover:bg-[rgba(255,255,255,0.06)] transition-colors cursor-pointer"
+            aria-label={isMobileDrawer ? 'Close navigation drawer' : 'Collapse sidebar'}
+          >
+            {isMobileDrawer ? (
               <X className="w-4 h-4" />
-            </button>
-          )}
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
         {/* Navigation Groups */}
@@ -442,11 +458,56 @@ export default function App() {
         </div>
       </div>
 
-      {/* Bottom User Card */}
+      {/* Bottom User Card (+ Mobile Role Switcher & Sign Out) */}
       <div
-        className="p-3 border-t"
+        className="p-3 border-t space-y-2"
         style={{ borderColor: 'rgba(134, 134, 172, 0.16)' }}
       >
+        {isMobileDrawer && (
+          <div className="px-2 pb-2 border-b space-y-1" style={{ borderColor: 'rgba(134, 134, 172, 0.16)' }}>
+            <div className="t-12 pb-1" style={{ color: 'var(--sidebar-muted)' }}>
+              View as
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('Admin' as UserRole);
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full px-2 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer ${
+                role === 'Admin'
+                  ? 'bg-[rgba(134,134,172,0.20)] text-[#FFFFE3] font-medium'
+                  : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.06)]'
+              }`}
+            >
+              <span>Mandate HQ (Admin)</span>
+              {role === 'Admin' && <span>●</span>}
+            </button>
+            {brokers.map((brk) => {
+              const active = role === 'Broker' && activeBrokerId === brk.id;
+              return (
+                <button
+                  key={brk.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveBrokerId(brk.id);
+                    setRole('Broker' as UserRole);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full px-2 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer ${
+                    active
+                      ? 'bg-[rgba(134,134,172,0.20)] text-[#FFFFE3] font-medium'
+                      : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.06)]'
+                  }`}
+                >
+                  <span className="truncate">Broker · {brk.name}</span>
+                  {active && <span>●</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="px-2 py-1.5 rounded-[6px] flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="t-13-medium text-white truncate">
@@ -461,10 +522,24 @@ export default function App() {
                 : `${activeBroker.firmName} · Broker`}
             </div>
           </div>
+          {isMobileDrawer && (
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                void logoutUser();
+              }}
+              className="px-2 py-1 rounded-[6px] t-12 text-[#FCA5A5] hover:bg-[rgba(255,255,255,0.06)] shrink-0 cursor-pointer"
+            >
+              Sign out
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
+
+  const mobileBottomNavItems = workspaceItems.concat(financeItems);
 
   return (
     <div
@@ -474,10 +549,12 @@ export default function App() {
         if (avatarMenuOpen) setAvatarMenuOpen(false);
       }}
     >
-      {/* Desktop Sidebar: 240px Eclipse 950 */}
-      <aside className="hidden lg:block w-[240px] shrink-0">
-        {renderSidebarContents(false)}
-      </aside>
+      {/* Desktop / Laptop Sidebar: 240px Eclipse 950 (collapsible) */}
+      {sidebarOpen && (
+        <aside className="hidden lg:block w-[240px] shrink-0 sticky top-0 h-screen">
+          {renderSidebarContents(false)}
+        </aside>
+      )}
 
       {/* Under 1024px: Sidebar Drawer */}
       {mobileMenuOpen && (
@@ -486,35 +563,53 @@ export default function App() {
             className="fixed inset-0 bg-black/40"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="drawer-enter relative z-10 w-[240px] h-full shadow-eclipse">
+          <aside className="drawer-enter relative z-10 w-[264px] max-w-[82vw] h-full shadow-eclipse overflow-y-auto">
             {renderSidebarContents(true)}
           </aside>
         </div>
       )}
 
       {/* Main Column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
         {/* Top Bar: 52px white */}
-        <header className="h-[52px] px-4 sm:px-6 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-4 shrink-0">
-          {/* Left: Breadcrumb */}
-          <div className="flex items-center gap-2 min-w-0">
+        <header className="sticky top-0 z-30 h-[52px] px-3 sm:px-6 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+          {/* Left: Sidebar Toggle & Breadcrumb */}
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            {/* Mobile (<1024px) drawer button */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden btn-ghost btn-sm px-1.5 -ml-1"
+              className="lg:hidden btn-ghost btn-sm px-2 -ml-1 shrink-0"
               aria-label="Open navigation menu"
             >
               <Menu className="w-4 h-4" />
             </button>
 
+            {/* Laptop / Desktop (>=1024px) sidebar collapse/expand toggle */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              title={sidebarOpen ? 'Hide sidebar (⌘B)' : 'Show sidebar (⌘B)'}
+              className="hidden lg:inline-flex btn-ghost btn-sm px-2 -ml-1.5 shrink-0 text-[var(--icon-muted)] hover:text-[var(--text-primary)]"
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftOpen className="w-4 h-4" />
+              )}
+            </button>
+
             <nav
               aria-label="Breadcrumb"
-              className="flex items-center gap-1.5 t-13 truncate"
+              className="flex items-center gap-1.5 t-13 min-w-0 truncate"
             >
-              <span className="text-[var(--text-tertiary)]">
+              <span className="hidden xs:inline sm:inline text-[var(--text-tertiary)] truncate max-w-[110px] sm:max-w-none">
                 {role === 'Admin' ? 'Workspace' : activeBroker.firmName}
               </span>
-              <span className="text-[var(--text-tertiary)]">/</span>
+              <span className="hidden xs:inline sm:inline text-[var(--text-tertiary)]">
+                /
+              </span>
               <span className="font-medium text-[var(--text-primary)] truncate">
                 {screenTitleMap[activeScreen]}
               </span>
@@ -522,17 +617,17 @@ export default function App() {
           </div>
 
           {/* Right: Search (⌘K), Notifications (Eclipse 600 dot), Copilot ghost button, Theme toggle, Avatar menu */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Search (⌘K) */}
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              className="h-8 px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] t-12 text-[var(--text-secondary)] flex items-center gap-2 cursor-pointer"
+              className="h-8 px-2 sm:px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] t-12 text-[var(--text-secondary)] flex items-center gap-1.5 sm:gap-2 cursor-pointer"
               aria-label="Search (Command+K)"
             >
               <Search className="w-3.5 h-3.5 text-[var(--icon-muted)]" />
               <span className="hidden sm:inline">Search</span>
-              <kbd className="t-mono text-[11px] text-[var(--text-tertiary)]">
+              <kbd className="hidden md:inline t-mono text-[11px] text-[var(--text-tertiary)]">
                 ⌘K
               </kbd>
             </button>
@@ -558,9 +653,17 @@ export default function App() {
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 top-10 z-40 w-80 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-2 divide-y divide-[var(--border)]">
-                  <div className="px-3 pb-1.5 t-12 text-[var(--text-tertiary)]">
-                    Notifications
+                <div className="fixed inset-x-3 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-10 z-40 sm:w-80 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-2 divide-y divide-[var(--border)]">
+                  <div className="px-3 pb-1.5 t-12 text-[var(--text-tertiary)] flex items-center justify-between">
+                    <span>Notifications</span>
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="sm:hidden text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                      aria-label="Close notifications"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <div className="py-1 max-h-64 overflow-y-auto">
                     {heldUnits.slice(0, 3).map((u) => (
@@ -573,13 +676,13 @@ export default function App() {
                           setActiveScreen('projects');
                           setSelectedUnitId(u.id);
                         }}
-                        className="w-full px-3 py-2 text-left hover:bg-[var(--subtle)] t-12 flex items-center justify-between gap-2 cursor-pointer"
+                        className="w-full px-3 py-2.5 sm:py-2 text-left hover:bg-[var(--subtle)] t-12 flex items-center justify-between gap-2 cursor-pointer"
                       >
                         <span className="text-[var(--text-primary)]">
                           Unit <span className="t-mono">{u.unitNumber}</span>{' '}
                           hold active
                         </span>
-                        <span className="t-mono text-[var(--status-hold)]">
+                        <span className="t-mono text-[var(--status-hold)] shrink-0">
                           24h hold
                         </span>
                       </button>
@@ -594,12 +697,12 @@ export default function App() {
                             role === 'Admin' ? 'finance' : 'broker-commissions'
                           );
                         }}
-                        className="w-full px-3 py-2 text-left hover:bg-[var(--subtle)] t-12 flex items-center justify-between gap-2 cursor-pointer"
+                        className="w-full px-3 py-2.5 sm:py-2 text-left hover:bg-[var(--subtle)] t-12 flex items-center justify-between gap-2 cursor-pointer"
                       >
                         <span className="text-[var(--text-primary)]">
                           Invoice awaiting approval
                         </span>
-                        <span className="t-mono text-[var(--text-primary)]">
+                        <span className="t-mono text-[var(--text-primary)] shrink-0">
                           {formatInr(b.commissionAmountInr)}
                         </span>
                       </button>
@@ -613,7 +716,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setCopilotOpen(true)}
-              className="btn-ghost btn-sm"
+              className="btn-ghost btn-sm px-2 sm:px-2.5"
             >
               Copilot
             </button>
@@ -643,7 +746,7 @@ export default function App() {
                   setNotificationsOpen(false);
                 }}
                 aria-label="Account menu"
-                className="h-8 px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] flex items-center gap-1.5 t-12 text-[var(--text-primary)] cursor-pointer"
+                className="h-8 px-2 sm:px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] flex items-center gap-1 sm:gap-1.5 t-12 text-[var(--text-primary)] cursor-pointer"
               >
                 <span className="t-mono font-medium">
                   {(role === 'Broker'
@@ -659,7 +762,7 @@ export default function App() {
               </button>
 
               {avatarMenuOpen && (
-                <div className="absolute right-0 top-10 z-40 w-60 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-1.5 divide-y divide-[var(--border)] t-12">
+                <div className="fixed right-3 top-14 sm:absolute sm:right-0 sm:top-10 z-40 w-64 max-w-[calc(100vw-24px)] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-1.5 divide-y divide-[var(--border)] t-12">
                   <div className="px-3 py-2">
                     <div className="font-medium text-[var(--text-primary)] truncate">
                       {currentUser.fullName}
@@ -680,7 +783,7 @@ export default function App() {
                         setRole('Admin' as UserRole);
                         setAvatarMenuOpen(false);
                       }}
-                      className={`w-full px-3 py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
+                      className={`w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
                         role === 'Admin'
                           ? 'text-[var(--accent)] font-medium'
                           : 'text-[var(--text-primary)]'
@@ -701,7 +804,7 @@ export default function App() {
                             setRole('Broker' as UserRole);
                             setAvatarMenuOpen(false);
                           }}
-                          className={`w-full px-3 py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
+                          className={`w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
                             active
                               ? 'text-[var(--accent)] font-medium'
                               : 'text-[var(--text-primary)]'
@@ -721,7 +824,7 @@ export default function App() {
                         setAvatarMenuOpen(false);
                         void logoutUser();
                       }}
-                      className="w-full px-3 py-1.5 text-left hover:bg-[var(--subtle)] text-[var(--status-blocked)] cursor-pointer"
+                      className="w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] text-[var(--status-blocked)] cursor-pointer"
                     >
                       Sign out
                     </button>
@@ -733,7 +836,7 @@ export default function App() {
         </header>
 
         {/* Active Screen Viewport */}
-        <main className="flex-1 p-4 sm:p-6 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-6 max-w-[1440px] w-full mx-auto">
           {role === 'Admin' ? (
             <>
               {activeScreen === 'command-centre' && <CommandCentreView />}
@@ -765,9 +868,59 @@ export default function App() {
         </main>
       </div>
 
+      {/* Mobile Bottom Navigation Bar (< 1024px) */}
+      <nav
+        aria-label="Mobile primary navigation"
+        style={{
+          backgroundColor: 'var(--sidebar-bg)',
+          borderColor: 'rgba(134, 134, 172, 0.2)',
+        }}
+        className={`lg:hidden fixed bottom-0 inset-x-0 z-30 h-14 border-t grid ${
+          mobileBottomNavItems.length === 4 ? 'grid-cols-4' : 'grid-cols-5'
+        } px-1 select-none`}
+      >
+        {mobileBottomNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeScreen === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleSelectNav(item.id)}
+              style={{
+                color: isActive ? '#FFFFE3' : '#8686AC',
+              }}
+              className="relative flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer"
+            >
+              {isActive && (
+                <span
+                  className="absolute top-0 left-3 right-3 h-[2px] rounded-b"
+                  style={{ backgroundColor: '#FFFFE3' }}
+                  aria-hidden="true"
+                />
+              )}
+              <div className="relative flex items-center justify-center">
+                <Icon className="w-4 h-4 shrink-0" />
+                {typeof item.count === 'number' && (
+                  <span
+                    className="ml-1 text-[10px] leading-none font-mono tabular-nums"
+                    style={{ color: isActive ? '#FFFFE3' : '#8686AC' }}
+                  >
+                    {item.count}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] leading-[14px] font-medium truncate max-w-full px-1">
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* ⌘K Command & Search Dialog (480px) */}
       {commandOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-20 p-3 sm:p-4">
           <div
             className="fixed inset-0 bg-black/40"
             onClick={() => setCommandOpen(false)}
@@ -778,7 +931,7 @@ export default function App() {
             className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse overflow-hidden"
           >
             <div className="px-3.5 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
-              <Search className="w-4 h-4 text-[var(--icon-muted)]" />
+              <Search className="w-4 h-4 text-[var(--icon-muted)] shrink-0" />
               <input
                 type="text"
                 autoFocus
@@ -790,13 +943,13 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setCommandOpen(false)}
-                className="t-12 t-mono text-[var(--text-tertiary)]"
+                className="t-12 t-mono text-[var(--text-tertiary)] shrink-0"
               >
                 ESC
               </button>
             </div>
 
-            <div className="p-2 max-h-72 overflow-y-auto space-y-2 t-13">
+            <div className="p-2 max-h-[65vh] sm:max-h-72 overflow-y-auto space-y-2 t-13">
               <div>
                 <div className="px-2 py-1 t-12 text-[var(--text-tertiary)]">
                   Go to
@@ -809,7 +962,7 @@ export default function App() {
                       setActiveScreen(nav.id);
                       setCommandOpen(false);
                     }}
-                    className="w-full px-2.5 py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
+                    className="w-full px-2.5 py-2 sm:py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
                   >
                     <span>{nav.label}</span>
                     <span className="t-12 t-mono text-[var(--text-tertiary)]">
@@ -836,12 +989,12 @@ export default function App() {
                           setSelectedUnitId(u.id);
                           setCommandOpen(false);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
+                        className="w-full px-2.5 py-2 sm:py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
                       >
-                        <span className="t-mono">
+                        <span className="t-mono truncate">
                           Unit {u.unitNumber} · {p?.name}
                         </span>
-                        <span className="t-12 text-[var(--text-tertiary)]">
+                        <span className="t-12 text-[var(--text-tertiary)] shrink-0 ml-2">
                           {u.status}
                         </span>
                       </button>
@@ -865,10 +1018,10 @@ export default function App() {
                         );
                         setCommandOpen(false);
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
+                      className="w-full px-2.5 py-2 sm:py-1.5 rounded-[6px] text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer"
                     >
-                      <span>{l.buyerName}</span>
-                      <span className="t-12 t-mono text-[var(--text-tertiary)]">
+                      <span className="truncate">{l.buyerName}</span>
+                      <span className="t-12 t-mono text-[var(--text-tertiary)] shrink-0 ml-2">
                         {formatInr(l.budgetInr)}
                       </span>
                     </button>
@@ -886,7 +1039,7 @@ export default function App() {
           role="status"
           aria-live="polite"
           style={{ borderLeftWidth: '4px', borderLeftColor: '#2E7D5B' }}
-          className="fixed bottom-4 right-4 z-50 w-full max-w-sm rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse p-3.5 flex items-start justify-between gap-3"
+          className="fixed bottom-16 lg:bottom-4 left-3 right-3 sm:left-auto sm:right-4 z-50 sm:w-full sm:max-w-sm rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse p-3.5 flex items-start justify-between gap-3"
         >
           <div className="min-w-0">
             <div className="t-13-medium text-[var(--text-primary)]">

@@ -175,10 +175,10 @@ export const CommandCentreView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* Ink-Wash Header Band (Used once on Overview header & Sign-in panel) */}
-      <div className="ink-wash-band rounded-[10px] p-5 flex items-start justify-between gap-4">
-        <div>
+      <div className="ink-wash-band rounded-[10px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="t-22-title text-[var(--text-primary)]">Overview</h1>
           <p className="t-13 text-[var(--text-secondary)] mt-1">
             Mandate absorption, monthly booking velocity, and channel partner settlements.
@@ -210,50 +210,46 @@ export const CommandCentreView: React.FC = () => {
           </button>
         </div>
 
-        {/* Mobile (< 640px) Actions Menu */}
-        <div className="relative sm:hidden">
+        {/* Mobile (< 640px) Actions Row */}
+        <div className="flex sm:hidden items-center justify-between gap-2 pt-1">
           <button
             type="button"
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="btn-secondary px-2"
-            aria-label="Page actions"
+            onClick={() => openBookingModal()}
+            className="btn-primary flex-1"
           >
-            <MoreHorizontal className="w-4 h-4" />
+            New booking
           </button>
-          {mobileMenuOpen && (
-            <div className="absolute right-0 mt-1 w-44 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  openBookingModal();
-                }}
-                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
-              >
-                New booking
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setActiveScreen('projects');
-                }}
-                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
-              >
-                Inventory
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleExportOverviewCsv();
-                }}
-                className="w-full px-3 py-1.5 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
-              >
-                Export CSV
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setActiveScreen('projects')}
+            className="btn-secondary"
+          >
+            Inventory
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="btn-secondary px-2.5"
+              aria-label="Page actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {mobileMenuOpen && (
+              <div className="absolute right-0 mt-1 w-44 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-eclipse py-1 z-30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleExportOverviewCsv();
+                  }}
+                  className="w-full px-3 py-2 text-left t-13 text-[var(--text-primary)] hover:bg-[var(--subtle)]"
+                >
+                  Export CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -275,9 +271,9 @@ export const CommandCentreView: React.FC = () => {
             <div
               key={item.id}
               onClick={item.onClick}
-              className="px-4 h-11 flex items-center justify-between gap-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+              className="px-3.5 sm:px-4 min-h-[44px] py-2 sm:py-0 flex items-center justify-between gap-2 sm:gap-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: item.dotColor }}
@@ -286,7 +282,7 @@ export const CommandCentreView: React.FC = () => {
                   {item.label}
                 </span>
                 <span
-                  className="px-2 py-0.5 rounded-[6px] font-mono tabular-nums t-12"
+                  className="px-2 py-0.5 rounded-[6px] font-mono tabular-nums t-12 shrink-0"
                   style={{
                     backgroundColor: item.tintColor,
                     color: item.dotColor,
@@ -296,13 +292,13 @@ export const CommandCentreView: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex items-center gap-4 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                 <span className="hidden md:inline font-mono tabular-nums t-12 text-[var(--text-secondary)]">
                   {item.detail}
                 </span>
-                <span className="t-12 text-[var(--accent)] inline-flex items-center gap-1 font-medium">
+                <span className="t-12 text-[var(--accent)] inline-flex items-center gap-1 font-medium whitespace-nowrap">
                   <span>{item.actionLabel}</span>
-                  <ArrowRight className="w-3 h-3" />
+                  <ArrowRight className="w-3 h-3 shrink-0" />
                 </span>
               </div>
             </div>
@@ -310,27 +306,27 @@ export const CommandCentreView: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. Four Metrics (label, 28px mono value, category dot; no icons, no fake trends) */}
+      {/* 2. Four Metrics (2x2 on mobile/tablet, 1x4 on desktop; label, 28px mono value, category dot) */}
       <section
         aria-label="Key metrics"
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[var(--border)] rounded-[10px] divide-y sm:divide-y-0 sm:divide-x divide-[var(--border)] bg-[var(--surface)] overflow-hidden"
+        className="grid grid-cols-2 lg:grid-cols-4 border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden"
       >
         {/* Active projects */}
         <div
           onClick={() => setActiveScreen('projects')}
-          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+          className="p-3.5 sm:p-4 border-b border-r border-[var(--border)] lg:border-b-0 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+          <div className="flex items-center gap-1.5 sm:gap-2 t-12 text-[var(--text-secondary)]">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: CATEGORY_PALETTE[0] }}
             />
-            <span>Active projects</span>
+            <span className="truncate">Active projects</span>
           </div>
-          <div className="t-28 text-[var(--text-primary)] mt-1.5">
+          <div className="t-28 text-[var(--text-primary)] mt-1.5 text-[22px] sm:text-[28px] leading-[30px] sm:leading-[36px]">
             {totalActiveProjects}
           </div>
-          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums truncate">
             {totalUnits} mandate units
           </div>
         </div>
@@ -338,42 +334,42 @@ export const CommandCentreView: React.FC = () => {
         {/* Units available / sold */}
         <div
           onClick={() => setActiveScreen('projects')}
-          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+          className="p-3.5 sm:p-4 border-b lg:border-b-0 lg:border-r border-[var(--border)] hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+          <div className="flex items-center gap-1.5 sm:gap-2 t-12 text-[var(--text-secondary)]">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: CATEGORY_PALETTE[3] }}
             />
-            <span>Units available / sold</span>
+            <span className="truncate">Available / sold</span>
           </div>
-          <div className="t-28 text-[var(--text-primary)] mt-1.5">
+          <div className="t-28 text-[var(--text-primary)] mt-1.5 text-[22px] sm:text-[28px] leading-[30px] sm:leading-[36px]">
             {availableUnits} / {soldUnits}
           </div>
-          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
-            {holdUnits} on hold · {formatPct((soldUnits / totalUnits) * 100)} sold
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums truncate">
+            {holdUnits} hold · {formatPct((soldUnits / totalUnits) * 100)} sold
           </div>
         </div>
 
         {/* Bookings this month (₹) — Headline figure in Eclipse 800 */}
         <div
           onClick={() => setActiveScreen('leads')}
-          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+          className="p-3.5 sm:p-4 border-r border-[var(--border)] hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+          <div className="flex items-center gap-1.5 sm:gap-2 t-12 text-[var(--text-secondary)]">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: CATEGORY_PALETTE[1] }}
             />
-            <span>Bookings this month</span>
+            <span className="truncate">Bookings (month)</span>
           </div>
           <div
-            className="t-28 text-[var(--money-total)] mt-1.5"
+            className="t-28 text-[var(--money-total)] mt-1.5 text-[22px] sm:text-[28px] leading-[30px] sm:leading-[36px]"
             title={formatInrFull(monthlySalesVolumeInr)}
           >
             {formatInr(monthlySalesVolumeInr)}
           </div>
-          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums truncate">
             {currentMonthPoint.conversions} confirmed allotments
           </div>
         </div>
@@ -381,31 +377,31 @@ export const CommandCentreView: React.FC = () => {
         {/* Pending commissions (₹) — Headline payout figure in Eclipse 800 */}
         <div
           onClick={() => setActiveScreen('finance')}
-          className="p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+          className="p-3.5 sm:p-4 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center gap-2 t-12 text-[var(--text-secondary)]">
+          <div className="flex items-center gap-1.5 sm:gap-2 t-12 text-[var(--text-secondary)]">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: CATEGORY_PALETTE[4] }}
             />
-            <span>Pending commissions</span>
+            <span className="truncate">Pending commissions</span>
           </div>
           <div
-            className="t-28 text-[var(--money-total)] mt-1.5"
+            className="t-28 text-[var(--money-total)] mt-1.5 text-[22px] sm:text-[28px] leading-[30px] sm:leading-[36px]"
             title={formatInrFull(pendingCommissionsInr)}
           >
             {formatInr(pendingCommissionsInr)}
           </div>
-          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums">
+          <div className="t-12 text-[var(--text-tertiary)] mt-1 font-mono tabular-nums truncate">
             {invoicesAwaitingApprovalCount + payoutsReadyCount} active tranches
           </div>
         </div>
       </section>
 
       {/* 3. Sales Chart + Project Absorption Rows */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* Sales Chart: Eclipse 800 bars + slate line, 1px Paper 100 gridlines, no gradients */}
-        <div className="lg:col-span-7 border border-[var(--border)] rounded-[10px] p-5 bg-[var(--surface)]">
+        <div className="lg:col-span-7 border border-[var(--border)] rounded-[10px] p-4 sm:p-5 bg-[var(--surface)]">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div>
               <SectionTitle>Sales velocity</SectionTitle>
@@ -431,7 +427,7 @@ export const CommandCentreView: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-56 w-full">
+          <div className="h-52 sm:h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={monthlySales}
@@ -484,7 +480,7 @@ export const CommandCentreView: React.FC = () => {
         </div>
 
         {/* Per-Project Absorption Rows (Project chip, thin progress bar in project colour, "8 / 24 sold") */}
-        <div className="lg:col-span-5 border border-[var(--border)] rounded-[10px] p-5 bg-[var(--surface)]">
+        <div className="lg:col-span-5 border border-[var(--border)] rounded-[10px] p-4 sm:p-5 bg-[var(--surface)]">
           <div className="flex items-center justify-between mb-3">
             <SectionTitle>Project absorption</SectionTitle>
             <span className="t-12 font-mono tabular-nums text-[var(--text-tertiary)]">
@@ -531,9 +527,9 @@ export const CommandCentreView: React.FC = () => {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between t-12 text-[var(--text-tertiary)] font-mono tabular-nums">
-                    <span>RERA {proj.reraNumber}</span>
-                    <span>
+                  <div className="flex items-center justify-between gap-2 t-12 text-[var(--text-tertiary)] font-mono tabular-nums">
+                    <span className="truncate">RERA {proj.reraNumber}</span>
+                    <span className="shrink-0">
                       {pHold} on hold · {formatPct((pSold / pUnits.length) * 100)}
                     </span>
                   </div>
@@ -546,16 +542,16 @@ export const CommandCentreView: React.FC = () => {
 
       {/* 4. Activity Timeline: mono time · event dot · one line */}
       <section aria-label="Activity timeline" className="space-y-2.5">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
           <SectionTitle>Activity</SectionTitle>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
             {['All', 'Booking', 'Lead', 'Inventory', 'Commission'].map(
               (cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setActivityFilter(cat)}
-                  className={`btn-sm rounded-[6px] cursor-pointer transition-colors ${
+                  className={`btn-sm rounded-[6px] cursor-pointer transition-colors shrink-0 ${
                     activityFilter === cat
                       ? 'bg-[var(--surface)] border border-[var(--border)] text-[var(--accent)] font-medium'
                       : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
@@ -592,10 +588,10 @@ export const CommandCentreView: React.FC = () => {
               return (
                 <div
                   key={act.id}
-                  className="px-4 h-10 flex items-center justify-between gap-4 hover:bg-[var(--subtle)] transition-colors"
+                  className="px-3.5 sm:px-4 min-h-[42px] py-2 sm:py-0 flex items-center justify-between gap-2.5 sm:gap-4 hover:bg-[var(--subtle)] transition-colors"
                 >
-                  <div className="flex items-center gap-3 min-w-0 truncate">
-                    <span className="font-mono tabular-nums t-12 text-[var(--text-tertiary)] shrink-0 w-24">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <span className="font-mono tabular-nums t-12 text-[var(--text-tertiary)] shrink-0 sm:w-24">
                       {formatShortDate(act.timestamp)}
                     </span>
                     <span
@@ -607,7 +603,7 @@ export const CommandCentreView: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                     {act.amountInr && (
                       <span
                         className="font-mono tabular-nums t-12 text-[var(--text-primary)]"
@@ -617,7 +613,7 @@ export const CommandCentreView: React.FC = () => {
                       </span>
                     )}
                     {proj && (
-                      <span className="hidden sm:inline">
+                      <span className="hidden md:inline">
                         <ProjectChip projectId={proj.id} name={proj.name} />
                       </span>
                     )}

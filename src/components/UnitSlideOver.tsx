@@ -70,19 +70,19 @@ export const UnitSlideOver: React.FC = () => {
       <aside
         role="dialog"
         aria-label={`Unit ${unit.unitNumber} details`}
-        className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+        className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-[100dvh] border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
       >
         <div className="divide-y divide-[var(--border)]">
           {/* Ivory Header Strip */}
           <div
-            className="p-5 flex items-start justify-between gap-4 border-b"
+            className="p-4 sm:p-5 flex items-start justify-between gap-4 border-b sticky top-0 z-10"
             style={{
               backgroundColor: 'var(--ivory-band)',
               borderColor: 'var(--ivory-band-border)',
             }}
           >
-            <div>
-              <div className="t-12 text-[var(--text-secondary)] flex items-center gap-1.5">
+            <div className="min-w-0">
+              <div className="t-12 text-[var(--text-secondary)] flex items-center gap-1.5 flex-wrap">
                 <span>{project?.name}</span>
                 <span>·</span>
                 <span>{unit.wing}</span>
@@ -103,7 +103,7 @@ export const UnitSlideOver: React.FC = () => {
                 setConfirmingHold(false);
                 setSelectedUnitId(null);
               }}
-              className="btn-ghost btn-sm px-2"
+              className="btn-ghost btn-sm px-2 shrink-0"
               aria-label="Close unit drawer"
             >
               <X className="w-4 h-4" />
@@ -112,14 +112,14 @@ export const UnitSlideOver: React.FC = () => {
 
           {/* Hold timer banner if on Hold */}
           {unit.status === 'Hold' && (
-            <div className="px-5 py-3 bg-[var(--subtle)] flex items-center justify-between gap-3">
-              <div className="t-13 text-[var(--text-secondary)]">
+            <div className="px-4 sm:px-5 py-3 bg-[var(--subtle)] flex items-center justify-between gap-3">
+              <div className="t-13 text-[var(--text-secondary)] truncate">
                 {heldLead
                   ? `Held for ${heldLead.buyerName}`
                   : '24h inventory hold active'}
               </div>
               <span
-                className={`t-12 t-mono ${
+                className={`t-12 t-mono shrink-0 ${
                   isExpiredHold
                     ? 'text-[var(--status-blocked)]'
                     : 'text-[var(--status-hold)]'
@@ -131,8 +131,8 @@ export const UnitSlideOver: React.FC = () => {
           )}
 
           {/* Unit Specs */}
-          <div className="p-5">
-            <div className="grid grid-cols-3 gap-4">
+          <div className="p-4 sm:p-5">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
               <div>
                 <div className="t-12 text-[var(--text-tertiary)]">
                   Configuration
@@ -161,7 +161,7 @@ export const UnitSlideOver: React.FC = () => {
           </div>
 
           {/* Cost Sheet (Total in Eclipse 800) */}
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className="flex items-center justify-between mb-3">
               <SectionTitle>Cost sheet</SectionTitle>
               <span className="t-12 t-mono text-[var(--text-tertiary)]">
@@ -170,93 +170,93 @@ export const UnitSlideOver: React.FC = () => {
             </div>
 
             <div className="space-y-2 t-13">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--text-secondary)]">
                   Base price ({formatArea(unit.carpetAreaSqFt)})
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(unit.basePriceInr)}
                 >
                   {formatInr(unit.basePriceInr)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--text-secondary)]">
                   Preferential location charge (PLC)
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(unit.plcInr)}
                 >
                   {formatInr(unit.plcInr)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--text-secondary)]">
                   Floor rise (Floor {unit.floor})
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(unit.floorRiseInr)}
                 >
                   {formatInr(unit.floorRiseInr)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between font-medium">
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2 font-medium">
                 <span className="text-[var(--text-primary)]">
                   Agreement value
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(agreementValue)}
                 >
                   {formatInr(agreementValue)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--text-secondary)]">GST (5.0%)</span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(gstEstimate)}
                 >
                   {formatInr(gstEstimate)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--text-secondary)]">
                   Stamp duty estimate (6.0%)
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(stampDutyEstimate)}
                 >
                   {formatInr(stampDutyEstimate)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between font-semibold">
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2 font-semibold">
                 <span className="text-[var(--text-primary)]">Total</span>
                 <span
-                  className="t-16 t-mono text-[var(--money-total)] text-right"
+                  className="t-16 t-mono text-[var(--money-total)] text-right shrink-0"
                   title={formatInrFull(totalOutflow)}
                 >
                   {formatInr(totalOutflow)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[var(--text-secondary)]">
+              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2 text-[var(--text-secondary)]">
                 <span>
                   Channel partner share (
                   {(project?.brokerSharePct ?? 2).toFixed(1)}%)
                 </span>
                 <span
-                  className="t-mono text-[var(--text-primary)] text-right"
+                  className="t-mono text-[var(--text-primary)] text-right shrink-0"
                   title={formatInrFull(estimatedBrokerCommission)}
                 >
                   {formatInr(estimatedBrokerCommission)}
@@ -266,7 +266,7 @@ export const UnitSlideOver: React.FC = () => {
           </div>
 
           {/* Status History */}
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className="mb-3">
               <SectionTitle>Status history</SectionTitle>
             </div>
@@ -328,14 +328,14 @@ export const UnitSlideOver: React.FC = () => {
         </div>
 
         {/* Footer Actions: "Hold 24h" (secondary) / "Book unit" (accent Eclipse 600) */}
-        <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)]">
+        <div className="sticky bottom-0 p-4 border-t border-[var(--border)] bg-[var(--subtle)]">
           {unit.status !== 'Sold' ? (
             confirmingHold ? (
               <div className="flex items-center justify-between gap-3">
                 <span className="t-13-medium text-[var(--text-primary)]">
                   Hold unit {unit.unitNumber} for 24h?
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setConfirmingHold(false)}

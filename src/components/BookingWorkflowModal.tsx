@@ -126,7 +126,7 @@ export const BookingWorkflowModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         className="fixed inset-0 bg-black/40"
         onClick={closeBookingModal}
@@ -135,22 +135,22 @@ export const BookingWorkflowModal: React.FC = () => {
       <div
         role="dialog"
         aria-label="Convert lead to booking"
-        className="relative z-10 w-full max-w-[640px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative z-10 w-full max-w-[640px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse overflow-hidden flex flex-col max-h-[92dvh]"
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
-          <div>
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="t-16 text-[var(--text-primary)]">
               Convert to booking
             </h2>
-            <p className="t-12 text-[var(--text-tertiary)] mt-0.5">
+            <p className="t-12 text-[var(--text-tertiary)] mt-0.5 truncate">
               Lock unit inventory, allot buyer, and record channel partner brokerage.
             </p>
           </div>
           <button
             type="button"
             onClick={closeBookingModal}
-            className="btn-ghost btn-sm px-2"
+            className="btn-ghost btn-sm px-2 shrink-0"
             aria-label="Close booking dialog"
           >
             <X className="w-4 h-4" />
@@ -158,7 +158,7 @@ export const BookingWorkflowModal: React.FC = () => {
         </div>
 
         {/* Step Indicator */}
-        <div className="px-5 py-2.5 bg-[var(--subtle)] border-b border-[var(--border)] grid grid-cols-4 gap-2">
+        <div className="px-3.5 sm:px-5 py-2 bg-[var(--subtle)] border-b border-[var(--border)] grid grid-cols-4 gap-1.5 sm:gap-2">
           {[
             { num: 1, label: '1. Buyer' },
             { num: 2, label: '2. Unit' },
@@ -172,7 +172,7 @@ export const BookingWorkflowModal: React.FC = () => {
                 key={item.num}
                 type="button"
                 onClick={() => setStep(item.num as 1 | 2 | 3 | 4)}
-                className={`h-7 px-2.5 rounded-[6px] t-12 text-left transition-colors cursor-pointer ${
+                className={`h-7 px-1.5 sm:px-2.5 rounded-[6px] text-[11px] sm:text-[12px] text-left truncate transition-colors cursor-pointer ${
                   active
                     ? 'bg-[var(--surface)] text-[var(--accent)] border border-[var(--border-strong)] font-medium'
                     : completed
@@ -187,7 +187,7 @@ export const BookingWorkflowModal: React.FC = () => {
         </div>
 
         {/* Body */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
           {errorMsg && (
             <div
               className="p-3 rounded-[6px] border t-12 flex items-center gap-2"

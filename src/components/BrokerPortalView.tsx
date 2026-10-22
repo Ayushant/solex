@@ -233,9 +233,124 @@ export const BrokerCommissionsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Ledger Table */}
+      {/* Ledger: Mobile Cards (<768px) + Desktop Table (>=768px) */}
       <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Ledger Cards (< 768px) */}
+        <div className="md:hidden divide-y divide-[var(--border)]">
+          {visibleBookings.map((bkg) => {
+            const proj = projects.find((p) => p.id === bkg.projectId);
+            const unit = units.find((u) => u.id === bkg.unitId);
+            const lead = leads.find((l) => l.id === bkg.leadId);
+            const brk = brokers.find((b) => b.id === bkg.brokerId);
+            const tdsInr = Math.round(bkg.commissionAmountInr * 0.05);
+            const netInr = bkg.commissionAmountInr - tdsInr;
+
+            return (
+              <div key={bkg.id} className="p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {proj && (
+                      <ProjectChip projectId={proj.id} name={proj.name} />
+                    )}
+                    <span className="text-[var(--text-primary)] t-mono font-medium t-13">
+                      Unit {unit?.unitNumber}
+                    </span>
+                  </div>
+                  <CommissionStatusBadge status={bkg.commissionStatus} />
+                </div>
+
+                <div className="flex items-center justify-between gap-2 t-12 text-[var(--text-secondary)]">
+                  <span className="truncate">
+                    Buyer: {lead?.buyerName || 'Allotted buyer'}
+                  </span>
+                  <span className="truncate text-[var(--text-tertiary)]">
+                    {brk?.firmName}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border)] t-12">
+                  <div>
+                    <div className="text-[var(--text-tertiary)]">Agreement</div>
+                    <div className="t-mono text-[var(--text-primary)] mt-0.5">
+                      {formatInr(bkg.agreementValueInr)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-tertiary)]">
+                      Brokerage ({formatPct(bkg.commissionPct)})
+                    </div>
+                    <div className="t-mono text-[var(--text-primary)] mt-0.5">
+                      {formatInr(bkg.commissionAmountInr)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[var(--text-tertiary)]">
+                      Net payable
+                    </div>
+                    <div className="t-mono font-semibold text-[var(--money-total)] mt-0.5">
+                      {formatInr(netInr)}
+                    </div>
+                  </div>
+                </div>
+
+                {role === 'Admin' && bkg.commissionStatus !== 'Released' && (
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <span className="t-12 t-mono text-[var(--text-tertiary)]">
+                      TDS 194H: {formatInr(tdsInr)}
+                    </span>
+                    {bkg.commissionStatus === 'Pending Approval' ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmBooking(bkg)}
+                        className="btn-secondary btn-sm"
+                      >
+                        Approve invoice
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmBooking(bkg)}
+                        className="btn-accent btn-sm"
+                      >
+                        Release payout
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Mobile Totals Footer */}
+          <div className="p-3.5 bg-[var(--subtle)] space-y-2 t-12">
+            <div className="font-semibold text-[var(--text-primary)]">
+              Total ({visibleBookings.length} tranches)
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[var(--text-tertiary)]">Agreement</div>
+                <div className="t-mono font-semibold text-[var(--money-total)] mt-0.5">
+                  {formatInr(totalAgreementValueInr)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--text-tertiary)]">Brokerage</div>
+                <div className="t-mono font-semibold text-[var(--money-total)] mt-0.5">
+                  {formatInr(totalBrokerageInr)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[var(--text-tertiary)]">Net payable</div>
+                <div className="t-mono font-semibold text-[var(--money-total)] mt-0.5">
+                  {formatInr(totalNetPayableInr)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop/Tablet Table (>= 768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-[var(--subtle)] border-b border-[var(--border)]">
               <tr className="h-9 text-[12px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
@@ -388,7 +503,7 @@ export const BrokerCommissionsView: React.FC = () => {
 
       {/* Confirmation Dialog for Approve Invoice / Release Payout */}
       {confirmBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
           <div
             className="fixed inset-0 bg-black/40"
             onClick={() => setConfirmBooking(null)}
@@ -396,7 +511,7 @@ export const BrokerCommissionsView: React.FC = () => {
           <div
             role="dialog"
             aria-label="Confirm finance action"
-            className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse p-5 space-y-4"
+            className="relative z-10 w-full max-w-[480px] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse p-4 sm:p-5 space-y-4"
           >
             {(() => {
               const brk = brokers.find((b) => b.id === confirmBooking.brokerId);
@@ -426,7 +541,7 @@ export const BrokerCommissionsView: React.FC = () => {
                   </div>
 
                   <div className="p-3.5 rounded-[6px] bg-[var(--subtle)] border border-[var(--border)] space-y-1.5 t-13">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-secondary)]">
                         Gross brokerage ({confirmBooking.commissionPct}%)
                       </span>
@@ -434,7 +549,7 @@ export const BrokerCommissionsView: React.FC = () => {
                         {formatInrFull(confirmBooking.commissionAmountInr)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-secondary)]">
                         Less TDS under Sec 194H (5.0%)
                       </span>
@@ -442,7 +557,7 @@ export const BrokerCommissionsView: React.FC = () => {
                         -{formatInrFull(tds)}
                       </span>
                     </div>
-                    <div className="pt-1.5 border-t border-[var(--border)] flex items-center justify-between font-semibold">
+                    <div className="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-2 font-semibold">
                       <span className="text-[var(--text-primary)]">
                         Net disbursement
                       </span>
@@ -509,7 +624,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
   const maxCommission = Math.max(...brokerCommissions, 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -520,9 +635,121 @@ export const AdminBrokersDirectoryView: React.FC = () => {
         </div>
       </div>
 
-      {/* Brokers Table */}
+      {/* Brokers Directory: Mobile Cards (<768px) + Desktop Table (>=768px) */}
       <div className="border border-[var(--border)] rounded-[10px] bg-[var(--surface)] overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Broker Cards (< 768px) */}
+        <div className="md:hidden divide-y divide-[var(--border)]">
+          {brokers.map((brk) => {
+            const brokerLeads = leads.filter(
+              (l) => l.assignedBrokerId === brk.id
+            );
+            const activeLeadsCount = brokerLeads.filter(
+              (l) => l.stage !== 'Booked'
+            ).length;
+            const siteVisitsCount = brokerLeads.filter(
+              (l) =>
+                l.stage === 'Site Visit' ||
+                l.stage === 'Negotiation' ||
+                l.stage === 'Booked'
+            ).length;
+            const brokerBookings = bookings.filter(
+              (b) => b.brokerId === brk.id
+            );
+            const conversionPct =
+              brokerLeads.length > 0
+                ? (brokerBookings.length / brokerLeads.length) * 100
+                : 0;
+            const totalCommissionInr = brokerBookings.reduce(
+              (sum, b) => sum + b.commissionAmountInr,
+              0
+            );
+            const isTopPerformer =
+              maxCommission > 0 && totalCommissionInr === maxCommission;
+
+            return (
+              <div
+                key={brk.id}
+                onClick={() => setSelectedBrokerDrawerId(brk.id)}
+                style={{
+                  backgroundColor: isTopPerformer
+                    ? 'var(--ivory-band)'
+                    : undefined,
+                }}
+                className="p-3.5 space-y-2.5 hover:bg-[var(--subtle)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="t-14-medium text-[var(--text-primary)] truncate">
+                      {brk.firmName}
+                    </div>
+                    <div className="t-12 text-[var(--text-secondary)] mt-0.5">
+                      {brk.name} ·{' '}
+                      <span className="t-mono text-[var(--text-tertiary)]">
+                        {brk.reraId}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[6px] t-12 shrink-0"
+                    style={{
+                      backgroundColor: 'var(--status-available-tint)',
+                      color: 'var(--status-available)',
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: 'var(--status-available)',
+                      }}
+                    />
+                    <span>Active</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border)] t-12">
+                  <div>
+                    <div className="text-[var(--text-tertiary)]">
+                      Active leads
+                    </div>
+                    <div className="t-mono text-[var(--text-primary)] mt-0.5">
+                      {activeLeadsCount} ({siteVisitsCount} visits)
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-tertiary)]">
+                      Conversion
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="w-10 h-1.5 bg-[var(--bg)] rounded-full overflow-hidden">
+                        <div
+                          className="h-full"
+                          style={{
+                            width: `${Math.min(100, Math.round(conversionPct))}%`,
+                            backgroundColor: '#272757',
+                          }}
+                        />
+                      </div>
+                      <span className="t-mono text-[var(--text-primary)]">
+                        {formatPct(conversionPct)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[var(--text-tertiary)]">
+                      Commission
+                    </div>
+                    <div className="t-mono font-semibold text-[var(--money-total)] mt-0.5">
+                      {formatInr(totalCommissionInr)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop/Tablet Table (>= 768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-[var(--subtle)] border-b border-[var(--border)]">
               <tr className="h-9 text-[12px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
@@ -653,7 +880,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
           <aside
             role="dialog"
             aria-label={inspectedBroker.firmName}
-            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-full border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
+            className="drawer-enter relative z-50 w-full max-w-[480px] bg-[var(--surface)] h-[100dvh] border-l border-[var(--border)] shadow-eclipse flex flex-col justify-between overflow-y-auto"
           >
             {(() => {
               const brokerLeads = leads.filter(
@@ -675,17 +902,17 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                 <>
                   <div className="divide-y divide-[var(--border)]">
                     <div
-                      className="p-5 flex items-start justify-between gap-4 border-b"
+                      className="p-4 sm:p-5 flex items-start justify-between gap-4 border-b sticky top-0 z-10"
                       style={{
                         backgroundColor: 'var(--ivory-band)',
                         borderColor: 'var(--ivory-band-border)',
                       }}
                     >
-                      <div>
+                      <div className="min-w-0">
                         <div className="t-12 t-mono text-[var(--text-secondary)]">
                           {inspectedBroker.reraId} · {inspectedBroker.city}
                         </div>
-                        <h2 className="t-22-title text-[var(--text-primary)] mt-1">
+                        <h2 className="t-22-title text-[var(--text-primary)] mt-1 truncate">
                           {inspectedBroker.firmName}
                         </h2>
                         <div className="t-13 text-[var(--text-secondary)] mt-0.5">
@@ -696,7 +923,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setSelectedBrokerDrawerId(null)}
-                        className="btn-ghost btn-sm px-2"
+                        className="btn-ghost btn-sm px-2 shrink-0"
                         aria-label="Close broker drawer"
                       >
                         <X className="w-4 h-4" />
@@ -704,7 +931,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                     </div>
 
                     {/* Performance Summary */}
-                    <div className="p-5 grid grid-cols-3 gap-4">
+                    <div className="p-4 sm:p-5 grid grid-cols-3 gap-3 sm:gap-4">
                       <div>
                         <div className="t-12 text-[var(--text-tertiary)]">
                           Leads
@@ -738,7 +965,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                     </div>
 
                     {/* Recent Deals */}
-                    <div className="p-5">
+                    <div className="p-4 sm:p-5">
                       <div className="mb-3">
                         <SectionTitle>
                           Recent deals ({brokerBookings.length})
@@ -761,21 +988,21 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                                 key={bkg.id}
                                 className="py-2.5 flex items-center justify-between gap-3 t-13"
                               >
-                                <div>
-                                  <div className="font-medium text-[var(--text-primary)]">
+                                <div className="min-w-0">
+                                  <div className="font-medium text-[var(--text-primary)] truncate">
                                     {proj?.name} ·{' '}
                                     <span className="t-mono">
                                       Unit {unit?.unitNumber}
                                     </span>
                                   </div>
-                                  <div className="t-12 text-[var(--text-secondary)]">
+                                  <div className="t-12 text-[var(--text-secondary)] truncate">
                                     {lead?.buyerName} ·{' '}
                                     <span className="t-mono">
                                       {formatShortDate(bkg.bookedAt)}
                                     </span>
                                   </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                   <div className="t-mono text-[var(--text-primary)]">
                                     {formatInr(bkg.commissionAmountInr)}
                                   </div>
@@ -791,7 +1018,7 @@ export const AdminBrokersDirectoryView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-between">
+                  <div className="sticky bottom-0 p-4 border-t border-[var(--border)] bg-[var(--subtle)] flex items-center justify-between">
                     <button
                       type="button"
                       onClick={() => setSelectedBrokerDrawerId(null)}
