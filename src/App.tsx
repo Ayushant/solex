@@ -872,8 +872,8 @@ export default function App() {
               </div>
 
               {/* View As List */}
-              <div className="p-5 space-y-2.5">
-                <div className="text-[13px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              <div className="p-5 space-y-2.5 bg-[var(--surface)]">
+                <div className="text-[12px] font-mono font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                   View as (Select Role to Preview)
                 </div>
 
@@ -885,20 +885,32 @@ export default function App() {
                   }}
                   className={`w-full px-4 py-3 rounded-[8px] border text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
                     role === 'Admin'
-                      ? 'border-[#272757] bg-[#F1F1F8] dark:bg-[#1B1A4E] text-[var(--text-primary)] font-semibold shadow-sm'
-                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)] text-[var(--text-primary)]'
+                      ? 'border-[#505081] bg-[#272757] text-[#FFFFE3] shadow-sm'
+                      : 'border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] text-[var(--text-primary)]'
                   }`}
                 >
                   <div>
-                    <div className="text-[15px] font-semibold">
+                    <div
+                      className={`text-[15px] font-semibold ${
+                        role === 'Admin'
+                          ? 'text-[#FFFFE3]'
+                          : 'text-[var(--text-primary)]'
+                      }`}
+                    >
                       Mandate HQ (Admin)
                     </div>
-                    <div className="text-[12px] text-[var(--text-secondary)]">
+                    <div
+                      className={`text-[12px] mt-0.5 ${
+                        role === 'Admin'
+                          ? 'text-[#D4D4EA]'
+                          : 'text-[var(--text-secondary)]'
+                      }`}
+                    >
                       Full command centre · All projects, leads, inventory & commission approvals
                     </div>
                   </div>
                   {role === 'Admin' && (
-                    <span className="text-[18px] text-[#2E7D5B] shrink-0">●</span>
+                    <span className="text-[18px] text-[#4ADE80] shrink-0">●</span>
                   )}
                 </button>
 
@@ -915,20 +927,32 @@ export default function App() {
                       }}
                       className={`w-full px-4 py-3 rounded-[8px] border text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
                         active
-                          ? 'border-[#272757] bg-[#F1F1F8] dark:bg-[#1B1A4E] text-[var(--text-primary)] font-semibold shadow-sm'
-                          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)] text-[var(--text-primary)]'
+                          ? 'border-[#505081] bg-[#272757] text-[#FFFFE3] shadow-sm'
+                          : 'border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] text-[var(--text-primary)]'
                       }`}
                     >
                       <div className="min-w-0">
-                        <div className="text-[15px] font-semibold truncate">
+                        <div
+                          className={`text-[15px] font-semibold truncate ${
+                            active
+                              ? 'text-[#FFFFE3]'
+                              : 'text-[var(--text-primary)]'
+                          }`}
+                        >
                           Broker · {brk.name}
                         </div>
-                        <div className="text-[12px] text-[var(--text-secondary)] truncate">
+                        <div
+                          className={`text-[12px] truncate mt-0.5 ${
+                            active
+                              ? 'text-[#D4D4EA]'
+                              : 'text-[var(--text-secondary)]'
+                          }`}
+                        >
                           {brk.firmName} · {brk.tier} Channel Partner ({brk.reraId})
                         </div>
                       </div>
                       {active && (
-                        <span className="text-[18px] text-[#2E7D5B] shrink-0">●</span>
+                        <span className="text-[18px] text-[#4ADE80] shrink-0">●</span>
                       )}
                     </button>
                   );
