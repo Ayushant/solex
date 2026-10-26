@@ -458,55 +458,61 @@ export default function App() {
         </div>
       </div>
 
-      {/* Bottom User Card (+ Mobile Role Switcher & Sign Out) */}
+      {/* Bottom User Card + Always-Visible Role Switcher & Sign Out */}
       <div
         className="p-3 border-t space-y-2"
         style={{ borderColor: 'rgba(134, 134, 172, 0.16)' }}
       >
-        {isMobileDrawer && (
-          <div className="px-2 pb-2 border-b space-y-1" style={{ borderColor: 'rgba(134, 134, 172, 0.16)' }}>
-            <div className="t-12 pb-1" style={{ color: 'var(--sidebar-muted)' }}>
-              View as
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setRole('Admin' as UserRole);
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full px-2 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer ${
-                role === 'Admin'
-                  ? 'bg-[rgba(134,134,172,0.20)] text-[#FFFFE3] font-medium'
-                  : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.06)]'
-              }`}
-            >
-              <span>Mandate HQ (Admin)</span>
-              {role === 'Admin' && <span>●</span>}
-            </button>
-            {brokers.map((brk) => {
-              const active = role === 'Broker' && activeBrokerId === brk.id;
-              return (
-                <button
-                  key={brk.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveBrokerId(brk.id);
-                    setRole('Broker' as UserRole);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full px-2 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer ${
-                    active
-                      ? 'bg-[rgba(134,134,172,0.20)] text-[#FFFFE3] font-medium'
-                      : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.06)]'
-                  }`}
-                >
-                  <span className="truncate">Broker · {brk.name}</span>
-                  {active && <span>●</span>}
-                </button>
-              );
-            })}
+        <div
+          className="px-2 pb-2.5 border-b space-y-1"
+          style={{ borderColor: 'rgba(134, 134, 172, 0.16)' }}
+        >
+          <div
+            className="t-12 pb-1 flex items-center justify-between"
+            style={{ color: '#FFFFE3' }}
+          >
+            <span className="font-semibold tracking-wide uppercase text-[11px]">
+              View as (Switch Role)
+            </span>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => {
+              setRole('Admin' as UserRole);
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full px-2.5 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer transition-colors ${
+              role === 'Admin'
+                ? 'bg-[#FFFFE3] text-[#0F0E47] font-semibold'
+                : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.08)]'
+            }`}
+          >
+            <span>Mandate HQ (Admin)</span>
+            {role === 'Admin' && <span>●</span>}
+          </button>
+          {brokers.map((brk) => {
+            const active = role === 'Broker' && activeBrokerId === brk.id;
+            return (
+              <button
+                key={brk.id}
+                type="button"
+                onClick={() => {
+                  setActiveBrokerId(brk.id);
+                  setRole('Broker' as UserRole);
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full px-2.5 py-1.5 rounded-[6px] text-left t-12 flex items-center justify-between cursor-pointer transition-colors ${
+                  active
+                    ? 'bg-[#FFFFE3] text-[#0F0E47] font-semibold'
+                    : 'text-[#E4E4F2] hover:bg-[rgba(255,255,255,0.08)]'
+                }`}
+              >
+                <span className="truncate">Broker · {brk.name}</span>
+                {active && <span>●</span>}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="px-2 py-1.5 rounded-[6px] flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -522,18 +528,16 @@ export default function App() {
                 : `${activeBroker.firmName} · Broker`}
             </div>
           </div>
-          {isMobileDrawer && (
-            <button
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                void logoutUser();
-              }}
-              className="px-2 py-1 rounded-[6px] t-12 text-[#FCA5A5] hover:bg-[rgba(255,255,255,0.06)] shrink-0 cursor-pointer"
-            >
-              Sign out
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              void logoutUser();
+            }}
+            className="px-2 py-1 rounded-[6px] t-12 text-[#FCA5A5] hover:bg-[rgba(255,255,255,0.06)] shrink-0 cursor-pointer"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </div>
@@ -546,12 +550,11 @@ export default function App() {
       className="min-h-screen flex bg-[var(--bg)] text-[var(--text-primary)]"
       onClick={() => {
         if (notificationsOpen) setNotificationsOpen(false);
-        if (avatarMenuOpen) setAvatarMenuOpen(false);
       }}
     >
       {/* Desktop / Laptop Sidebar: 240px Eclipse 950 (collapsible) */}
       {sidebarOpen && (
-        <aside className="hidden lg:block w-[240px] shrink-0 sticky top-0 h-screen">
+        <aside className="hidden lg:block w-[240px] shrink-0 sticky top-0 h-screen overflow-y-auto">
           {renderSidebarContents(false)}
         </aside>
       )}
@@ -571,8 +574,8 @@ export default function App() {
 
       {/* Main Column */}
       <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
-        {/* Top Bar: 52px white */}
-        <header className="sticky top-0 z-30 h-[52px] px-3 sm:px-6 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+        {/* Top Bar: 56px */}
+        <header className="sticky top-0 z-30 h-[56px] px-3 sm:px-6 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-2 sm:gap-4 shrink-0">
           {/* Left: Sidebar Toggle & Breadcrumb */}
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             {/* Mobile (<1024px) drawer button */}
@@ -616,18 +619,18 @@ export default function App() {
             </nav>
           </div>
 
-          {/* Right: Search (⌘K), Notifications (Eclipse 600 dot), Copilot ghost button, Theme toggle, Avatar menu */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Right: Search (⌘K), Notifications, Copilot, Theme toggle, BIG Role Switcher Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Search (⌘K) */}
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              className="h-8 px-2 sm:px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] t-12 text-[var(--text-secondary)] flex items-center gap-1.5 sm:gap-2 cursor-pointer"
+              className="h-9 px-2.5 sm:px-3 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] t-12 text-[var(--text-secondary)] flex items-center gap-1.5 sm:gap-2 cursor-pointer"
               aria-label="Search (Command+K)"
             >
               <Search className="w-3.5 h-3.5 text-[var(--icon-muted)]" />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="hidden md:inline t-mono text-[11px] text-[var(--text-tertiary)]">
+              <span className="hidden md:inline">Search</span>
+              <kbd className="hidden lg:inline t-mono text-[11px] text-[var(--text-tertiary)]">
                 ⌘K
               </kbd>
             </button>
@@ -638,7 +641,6 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setNotificationsOpen((prev) => !prev);
-                  setAvatarMenuOpen(false);
                 }}
                 className="btn-ghost btn-sm px-2 relative"
                 aria-label="Notifications"
@@ -737,103 +739,225 @@ export default function App() {
               )}
             </button>
 
-            {/* Avatar Menu (with "View as" role switcher and Sign out) */}
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setAvatarMenuOpen((prev) => !prev);
-                  setNotificationsOpen(false);
-                }}
-                aria-label="Account menu"
-                className="h-8 px-2 sm:px-2.5 rounded-[6px] border border-[var(--border)] bg-[var(--subtle)] hover:border-[var(--border-strong)] flex items-center gap-1 sm:gap-1.5 t-12 text-[var(--text-primary)] cursor-pointer"
-              >
-                <span className="t-mono font-medium">
-                  {(role === 'Broker'
-                    ? activeBroker.name
-                    : currentUser.fullName
-                  )
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)}
-                </span>
-                <ChevronDown className="w-3 h-3 text-[var(--text-tertiary)]" />
-              </button>
-
-              {avatarMenuOpen && (
-                <div className="fixed right-3 top-14 sm:absolute sm:right-0 sm:top-10 z-40 w-64 max-w-[calc(100vw-24px)] rounded-[10px] bg-[var(--surface)] border border-[var(--border)] shadow-eclipse py-1.5 divide-y divide-[var(--border)] t-12">
-                  <div className="px-3 py-2">
-                    <div className="font-medium text-[var(--text-primary)] truncate">
-                      {currentUser.fullName}
-                    </div>
-                    <div className="t-mono text-[var(--text-tertiary)] truncate">
-                      {currentUser.email}
-                    </div>
-                  </div>
-
-                  {/* View as (Role & Persona Switcher) */}
-                  <div className="py-1">
-                    <div className="px-3 py-1 text-[var(--text-tertiary)]">
-                      View as
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRole('Admin' as UserRole);
-                        setAvatarMenuOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
-                        role === 'Admin'
-                          ? 'text-[var(--accent)] font-medium'
-                          : 'text-[var(--text-primary)]'
-                      }`}
-                    >
-                      <span>Mandate HQ (Admin)</span>
-                      {role === 'Admin' && <span>●</span>}
-                    </button>
-                    {brokers.map((brk) => {
-                      const active =
-                        role === 'Broker' && activeBrokerId === brk.id;
-                      return (
-                        <button
-                          key={brk.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveBrokerId(brk.id);
-                            setRole('Broker' as UserRole);
-                            setAvatarMenuOpen(false);
-                          }}
-                          className={`w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] flex items-center justify-between cursor-pointer ${
-                            active
-                              ? 'text-[var(--accent)] font-medium'
-                              : 'text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span className="truncate">Broker · {brk.name}</span>
-                          {active && <span>●</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAvatarMenuOpen(false);
-                        void logoutUser();
-                      }}
-                      className="w-full px-3 py-2 sm:py-1.5 text-left hover:bg-[var(--subtle)] text-[var(--status-blocked)] cursor-pointer"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* BIG Prominent "View As / Switch Role" Button (Opens Large Role Switcher Popup) */}
+            <button
+              type="button"
+              onClick={() => {
+                setAvatarMenuOpen(true);
+                setNotificationsOpen(false);
+              }}
+              aria-label="Switch View Role"
+              className="h-9 px-3 sm:px-4 rounded-[8px] bg-[#272757] hover:bg-[#1B1A4E] text-[#FFFFE3] border border-[#505081] shadow-sm flex items-center gap-2 text-[13px] font-semibold cursor-pointer transition-all"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#2E7D5B] ring-2 ring-[#FFFFE3]/30 shrink-0" />
+              <span className="hidden sm:inline text-[#C6C6DF] font-normal">
+                View as:
+              </span>
+              <span className="truncate max-w-[140px] sm:max-w-[190px]">
+                {role === 'Admin'
+                  ? 'Mandate HQ (Admin)'
+                  : `Broker · ${activeBroker.name}`}
+              </span>
+              <ChevronDown className="w-4 h-4 text-[#FFFFE3] shrink-0" />
+            </button>
           </div>
         </header>
+
+        {/* Prominent Top Role Switcher Bar (Always visible so client immediately sees all roles they can switch to) */}
+        <div className="bg-[#0F0E47] text-[#FFFFE3] border-b border-[#3A3A6B] px-3 sm:px-6 py-2.5">
+          <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="px-2 py-0.5 rounded-[4px] bg-[#505081] text-[#FFFFE3] text-[11px] font-mono font-semibold uppercase tracking-wider shrink-0">
+                  View As
+                </span>
+                <span className="text-[13px] font-medium text-white truncate">
+                  {role === 'Admin'
+                    ? `${currentUser.fullName} (${currentUser.email})`
+                    : `${activeBroker.name} (${activeBroker.name.toLowerCase().replace(/\s+/g, '.')}@apexrealty.in)`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAvatarMenuOpen(true)}
+                className="md:hidden px-2.5 py-1 rounded-[6px] bg-[#FFFFE3] text-[#0F0E47] text-[12px] font-semibold shrink-0 cursor-pointer"
+              >
+                Switch Role ▾
+              </button>
+            </div>
+
+            {/* One-Click Big Role Buttons */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 md:pb-0">
+              <button
+                type="button"
+                onClick={() => setRole('Admin' as UserRole)}
+                className={`px-3 py-1.5 rounded-[6px] text-[12px] sm:text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-all ${
+                  role === 'Admin'
+                    ? 'bg-[#FFFFE3] text-[#0F0E47] font-semibold shadow-sm'
+                    : 'bg-[#1B1A4E] text-[#E4E4F2] border border-[#3A3A6B] hover:bg-[#272757]'
+                }`}
+              >
+                <span>Mandate HQ (Admin)</span>
+                {role === 'Admin' && <span className="text-[#2E7D5B]">●</span>}
+              </button>
+
+              {brokers.map((brk) => {
+                const active = role === 'Broker' && activeBrokerId === brk.id;
+                return (
+                  <button
+                    key={brk.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveBrokerId(brk.id);
+                      setRole('Broker' as UserRole);
+                    }}
+                    className={`px-3 py-1.5 rounded-[6px] text-[12px] sm:text-[13px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-all ${
+                      active
+                        ? 'bg-[#FFFFE3] text-[#0F0E47] font-semibold shadow-sm'
+                        : 'bg-[#1B1A4E] text-[#E4E4F2] border border-[#3A3A6B] hover:bg-[#272757]'
+                    }`}
+                  >
+                    <span>Broker · {brk.name}</span>
+                    {active && <span className="text-[#2E7D5B]">●</span>}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setAvatarMenuOpen(true)}
+                className="px-2.5 py-1.5 rounded-[6px] text-[12px] font-medium bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.16)] text-[#C6C6DF] shrink-0 cursor-pointer"
+              >
+                Account & Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Big Centered Popup Modal for Role Switcher ("View as") */}
+        {avatarMenuOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-[2px]"
+              onClick={() => setAvatarMenuOpen(false)}
+            />
+            <div
+              role="dialog"
+              aria-label="Switch Role and Account"
+              className="relative z-10 w-full max-w-[460px] rounded-[12px] bg-[var(--surface)] border-2 border-[var(--accent)] shadow-eclipse overflow-hidden"
+            >
+              {/* Modal Header: Active User Info */}
+              <div className="px-5 py-4 bg-[#0F0E47] text-[#FFFFE3] flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-[#A6A6C8]">
+                    Active Session
+                  </div>
+                  <div className="text-[18px] font-semibold text-white truncate mt-0.5">
+                    {role === 'Broker' ? activeBroker.name : currentUser.fullName}
+                  </div>
+                  <div className="t-mono text-[13px] text-[#C6C6DF] truncate">
+                    {role === 'Broker'
+                      ? `${activeBroker.name.toLowerCase().replace(/\s+/g, '.')}@apexrealty.in`
+                      : currentUser.email}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAvatarMenuOpen(false)}
+                  className="p-1.5 rounded-[6px] text-[#A6A6C8] hover:text-white hover:bg-white/10 cursor-pointer"
+                  aria-label="Close role switcher"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* View As List */}
+              <div className="p-5 space-y-2.5">
+                <div className="text-[13px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                  View as (Select Role to Preview)
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRole('Admin' as UserRole);
+                    setAvatarMenuOpen(false);
+                  }}
+                  className={`w-full px-4 py-3 rounded-[8px] border text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                    role === 'Admin'
+                      ? 'border-[#272757] bg-[#F1F1F8] dark:bg-[#1B1A4E] text-[var(--text-primary)] font-semibold shadow-sm'
+                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)] text-[var(--text-primary)]'
+                  }`}
+                >
+                  <div>
+                    <div className="text-[15px] font-semibold">
+                      Mandate HQ (Admin)
+                    </div>
+                    <div className="text-[12px] text-[var(--text-secondary)]">
+                      Full command centre · All projects, leads, inventory & commission approvals
+                    </div>
+                  </div>
+                  {role === 'Admin' && (
+                    <span className="text-[18px] text-[#2E7D5B] shrink-0">●</span>
+                  )}
+                </button>
+
+                {brokers.map((brk) => {
+                  const active = role === 'Broker' && activeBrokerId === brk.id;
+                  return (
+                    <button
+                      key={brk.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveBrokerId(brk.id);
+                        setRole('Broker' as UserRole);
+                        setAvatarMenuOpen(false);
+                      }}
+                      className={`w-full px-4 py-3 rounded-[8px] border text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                        active
+                          ? 'border-[#272757] bg-[#F1F1F8] dark:bg-[#1B1A4E] text-[var(--text-primary)] font-semibold shadow-sm'
+                          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)] text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-semibold truncate">
+                          Broker · {brk.name}
+                        </div>
+                        <div className="text-[12px] text-[var(--text-secondary)] truncate">
+                          {brk.firmName} · {brk.tier} Channel Partner ({brk.reraId})
+                        </div>
+                      </div>
+                      {active && (
+                        <span className="text-[18px] text-[#2E7D5B] shrink-0">●</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Footer: Sign Out */}
+              <div className="px-5 py-3.5 bg-[var(--subtle)] border-t border-[var(--border)] flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatarMenuOpen(false);
+                    void logoutUser();
+                  }}
+                  className="px-4 py-2 rounded-[6px] bg-[#A33A2E] hover:opacity-90 text-white text-[13px] font-semibold cursor-pointer"
+                >
+                  Sign out
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarMenuOpen(false)}
+                  className="btn-secondary"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Active Screen Viewport */}
         <main className="flex-1 p-3.5 sm:p-6 max-w-[1440px] w-full mx-auto">
